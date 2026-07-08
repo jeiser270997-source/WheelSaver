@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+    <meta http-equiv="X-UA-Compatible" content="ie=edge"/>
+    <title>WheelSaver Dashboard</title>
+    <!-- Tabler Core -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@latest/dist/css/tabler.min.css">
+    <style>
+      .hide { display: none; }
+    </style>
+  </head>
+  <body class="theme-light">
+    <div class="page">
+      <!-- Navbar -->
+      <header class="navbar navbar-expand-md navbar-light d-print-none">
+        <div class="container-xl">
+          <h1 class="navbar-brand navbar-brand-autodark d-none-navbar-horizontal pe-0 pe-md-3">
+            🛞 WheelSaver
+          </h1>
+          <div class="navbar-nav flex-row order-md-last">
+            <div class="nav-item">
+              <button id="btn-scrape" class="btn btn-primary">
+                Trigger Scraper (Background)
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+      
+      <div class="page-wrapper">
+        <div class="page-body">
+          <div class="container-xl">
+            <!-- Stats Row -->
+            <div class="row row-deck row-cards mb-4" id="stats-container">
+              <div class="col-sm-6 col-lg-3">
+                <div class="card">
+                  <div class="card-body">
+                    <div class="d-flex align-items-center">
+                      <div class="subheader">Total Repos</div>
+                    </div>
+                    <div class="h1 mb-3" id="stat-repos">-</div>
+                  </div>
+                </div>
+              </div>
+              <div class="col-sm-6 col-lg-3">
+                <div class="card">
+                  <div class="card-body">
+                    <div class="d-flex align-items-center">
+                      <div class="subheader">Lenguajes</div>
+                    </div>
+                    <div class="h1 mb-3" id="stat-langs">-</div>
+                  </div>
+                </div>
+              </div>
+              <div class="col-sm-6 col-lg-3">
+                <div class="card">
+                  <div class="card-body">
+                    <div class="d-flex align-items-center">
+                      <div class="subheader">Estrella Max</div>
+                    </div>
+                    <div class="h1 mb-3" id="stat-max">-</div>
+                  </div>
+                </div>
+              </div>
+              <div class="col-sm-6 col-lg-3">
+                <div class="card">
+                  <div class="card-body">
+                    <div class="d-flex align-items-center">
+                      <div class="subheader">Estrella Promedio</div>
+                    </div>
+                    <div class="h1 mb-3" id="stat-avg">-</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Search Row -->
+            <div class="card mb-4">
+              <div class="card-body">
+                <h3 class="card-title">🔍 Buscar Repositorios</h3>
+                <form id="search-form" class="row g-3">
+                  <div class="col-md-6">
+                    <input type="text" class="form-control" id="input-q" placeholder="Keywords (ej: fastapi pytest docker)">
+                  </div>
+                  <div class="col-md-3">
+                    <input type="text" class="form-control" id="input-lang" placeholder="Lenguaje (opcional)">
+                  </div>
+                  <div class="col-md-2">
+                    <input type="number" class="form-control" id="input-limit" value="10" min="1" max="100">
+                  </div>
+                  <div class="col-md-1">
+                    <button type="submit" class="btn btn-primary w-100">Buscar</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <!-- Results Table -->
+            <div class="card hide" id="results-card">
+              <div class="card-header">
+                <h3 class="card-title">Resultados</h3>
+              </div>
+              <div class="table-responsive">
+                <table class="table card-table table-vcenter text-nowrap datatable">
+                  <thead>
+                    <tr>
+                      <th>Repo</th>
+                      <th>Estrellas</th>
+                      <th>Lenguaje</th>
+                      <th>Descripción</th>
+                    </tr>
+                  </thead>
+                  <tbody id="results-body">
+                    <!-- JS fills this -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="loading" class="hide text-center py-4">
+              <div class="spinner-border text-primary" role="status"></div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>

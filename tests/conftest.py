@@ -128,9 +128,15 @@ def db_with_data(db_conn):
             """INSERT INTO repos (id, name, owner, description, url, stars, language, topics, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                repo["id"], repo["name"], repo["owner"],
-                repo["description"], repo["url"], repo["stars"],
-                repo["language"], topics_str, repo["updated_at"],
+                repo["id"],
+                repo["name"],
+                repo["owner"],
+                repo["description"],
+                repo["url"],
+                repo["stars"],
+                repo["language"],
+                topics_str,
+                repo["updated_at"],
             ),
         )
     db_conn.commit()

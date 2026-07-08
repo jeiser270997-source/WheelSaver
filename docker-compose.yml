@@ -9,7 +9,42 @@ services:
     volumes:
       - ./data:/app/data
       - ./.env:/app/.env:ro
+      - .:/app
     environment:
       - PYTHONUNBUFFERED=1
+    depends_on:
+      - redis
+      - typesense
     restart: unless-stopped
-    command: python cli.py api --host 0.0.0.0 --port 8000
+    command: gunicorn api.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+
+  redis:
+    image: redis:7-alpine
+    container_name: wheelsaver-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  typesense:
+    image: typesense/typesense:26.0
+    container_name: wheelsaver-typesense
+    ports:
+      - "8108:8108"
+    volumes:
+      - ./data/typesense:/data
+    command: '--data-dir /data --api-key=wheelsaver_typesense_key --enable-cors=true'
+    restart: unless-stopped
+
+  celery_worker:
+    build: .
+    container_name: wheelsaver-worker
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - redis
+    restart: unless-stopped
+    command: celery -A worker.celery worker --loglevel=info
+

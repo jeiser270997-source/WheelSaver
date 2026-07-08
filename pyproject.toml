@@ -30,3 +30,11 @@ Homepage = "https://github.com/JeisarGtz/Top_Repos"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = []

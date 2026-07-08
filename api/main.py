@@ -9,21 +9,27 @@ Uso:
 Documentacion automatica: http://localhost:8000/docs
 """
 
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from scraper.db_manager import (
-    search_repos,
-    search_repos_multi_keywords,
-    get_stats,
-    DB_PATH,
-)
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
+import aiosqlite
 
-import sqlite3
+from api.database import get_db
+from api.repository import (
+    search_repos_async,
+    search_repos_multi_keywords_async,
+    get_stats_async,
+    get_repo_async,
+    get_languages_async,
+    list_repos_async,
+    get_top_async,
+)
 
 app = FastAPI(
     title="WheelSaver API",
     description="Busca y analiza repositorios de GitHub desde la base de datos local de WheelSaver",
-    version="3.0.0",
+    version="3.3.0",
 )
 
 app.add_middleware(
@@ -35,18 +41,25 @@ app.add_middleware(
 )
 
 
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/web/index.html")
+
+
 @app.get("/health")
-def health():
+async def health(db: aiosqlite.Connection = Depends(get_db)):
     """Healthcheck simple."""
-    return {"status": "ok", "version": "3.0.0", "repos": get_stats()["total_repos"]}
+    stats = await get_stats_async(db)
+    return {"status": "ok", "version": "3.0.0", "repos": stats["total_repos"]}
 
 
 @app.get("/search")
-def search(
+async def search(
     q: str = Query(..., description="Keyword(s) para buscar"),
     limit: int = Query(10, ge=1, le=100, description="Max resultados"),
     language: str = Query(None, description="Filtrar por lenguaje"),
     min_stars: int = Query(0, ge=0, description="Estrellas minimas"),
+    db: aiosqlite.Connection = Depends(get_db),
 ):
     """Busqueda full-text en la base de datos (FTS5 + fallback LIKE)."""
     keywords = [kw.strip() for kw in q.split() if kw.strip()]
@@ -54,9 +67,9 @@ def search(
         return {"query": q, "repos": [], "total": 0}
 
     if len(keywords) == 1:
-        repos = search_repos(keywords[0], limit=limit)
+        repos = await search_repos_async(db, keywords[0], limit=limit)
     else:
-        repos = search_repos_multi_keywords(keywords, limit=limit)
+        repos = await search_repos_multi_keywords_async(db, keywords, limit=limit)
 
     # Filtros post-query
     if language:
@@ -68,100 +81,70 @@ def search(
 
 
 @app.get("/stats")
-def api_stats():
+async def api_stats(db: aiosqlite.Connection = Depends(get_db)):
     """Estadisticas de la base de datos."""
-    return get_stats()
+    return await get_stats_async(db)
 
 
 @app.get("/repos/{owner}/{name}")
-def get_repo(owner: str, name: str):
+async def get_repo(owner: str, name: str, db: aiosqlite.Connection = Depends(get_db)):
     """Obtener un repositorio por owner y nombre."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT * FROM repos WHERE owner = ? AND name = ?",
-        (owner, name),
-    )
-    row = cursor.fetchone()
-    conn.close()
-
-    if not row:
+    repo = await get_repo_async(db, owner, name)
+    if not repo:
         raise HTTPException(status_code=404, detail="Repositorio no encontrado")
-
-    return dict(row)
+    return repo
 
 
 @app.get("/languages")
-def languages(
+async def languages(
     limit: int = Query(50, ge=1, le=200, description="Max lenguajes"),
     min_repos: int = Query(1, ge=1, description="Min repos por lenguaje"),
+    db: aiosqlite.Connection = Depends(get_db),
 ):
     """Lista de lenguajes de programacion con cantidad de repos."""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        """SELECT language, COUNT(*) as count FROM repos
-           WHERE language != '' GROUP BY language
-           HAVING count >= ? ORDER BY count DESC LIMIT ?""",
-        (min_repos, limit),
-    )
-    langs = [{"language": r[0], "repos": r[1]} for r in cursor.fetchall()]
-    conn.close()
+    langs = await get_languages_async(db, min_repos=min_repos, limit=limit)
     return {"languages": langs}
 
 
 @app.get("/repos")
-def list_repos(
+async def list_repos(
     page: int = Query(1, ge=1, description="Numero de pagina"),
     per_page: int = Query(50, ge=1, le=200, description="Repos por pagina"),
     language: str = Query(None, description="Filtrar por lenguaje"),
     sort: str = Query("stars", description="Ordenar por: stars, name, updated_at"),
+    db: aiosqlite.Connection = Depends(get_db),
 ):
     """Lista paginada de repositorios."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-
-    order_col = "stars" if sort == "stars" else (sort if sort in ("name", "updated_at") else "stars")
-
-    if language:
-        cursor.execute(
-            f"SELECT * FROM repos WHERE language = ? ORDER BY {order_col} DESC LIMIT ? OFFSET ?",
-            (language, per_page, (page - 1) * per_page),
-        )
-    else:
-        cursor.execute(
-            f"SELECT * FROM repos ORDER BY {order_col} DESC LIMIT ? OFFSET ?",
-            (per_page, (page - 1) * per_page),
-        )
-
-    repos = [dict(r) for r in cursor.fetchall()]
-    conn.close()
+    order_col = (
+        "stars" if sort == "stars" else (sort if sort in ("name", "updated_at") else "stars")
+    )
+    offset = (page - 1) * per_page
+    repos = await list_repos_async(
+        db, order_col=order_col, language=language, per_page=per_page, offset=offset
+    )
     return {"page": page, "per_page": per_page, "repos": repos, "total": len(repos)}
 
 
 @app.get("/top")
-def top(
+async def top(
     limit: int = Query(10, ge=1, le=100, description="Cuantos top repos"),
     language: str = Query(None, description="Filtrar por lenguaje"),
+    db: aiosqlite.Connection = Depends(get_db),
 ):
     """Top repositorios por estrellas."""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-
-    if language:
-        cursor.execute(
-            "SELECT * FROM repos WHERE language = ? ORDER BY stars DESC LIMIT ?",
-            (language, limit),
-        )
-    else:
-        cursor.execute(
-            "SELECT * FROM repos ORDER BY stars DESC LIMIT ?",
-            (limit,),
-        )
-
-    repos = [dict(r) for r in cursor.fetchall()]
-    conn.close()
+    repos = await get_top_async(db, limit=limit, language=language)
     return {"limit": limit, "repos": repos}
+
+
+@app.post("/scrape")
+async def trigger_scrape(
+    min_stars: int = Query(500, ge=10, description="Estrellas minimas para buscar"),
+):
+    """Lanza el scraper de GitHub de forma distribuida en el worker de Celery."""
+    from worker import scrape_task
+    task = scrape_task.delay(min_stars)
+    return {"status": "ok", "task_id": task.id, "message": f"Scraper Celery iniciado (min_stars={min_stars})"}
+
+app.mount("/web", StaticFiles(directory="frontend", html=True), name="frontend")
+
+

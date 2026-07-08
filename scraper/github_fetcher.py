@@ -9,14 +9,14 @@ from scraper.db_manager import upsert_repos, DB_PATH, init_db
 
 load_dotenv(override=True)
 
-GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 # ============================================================
 # UMBRAL DE CALIDAD (repos de 500-1000 estrellas)
 # Se aplican filtros extra para no guardar repos desatendidos
 # ============================================================
 QUALITY_FILTER_THRESHOLD = 1000  # por debajo aplicamos filtros
-MAX_INACTIVE_DAYS = 365          # sin commits en >1 año = desatendido
+MAX_INACTIVE_DAYS = 365  # sin commits en >1 año = desatendido
 
 
 def is_active_repo(updated_at_str, stars):
@@ -28,7 +28,7 @@ def is_active_repo(updated_at_str, stars):
         return True
 
     try:
-        updated_at = datetime.fromisoformat(updated_at_str.replace('Z', '+00:00'))
+        updated_at = datetime.fromisoformat(updated_at_str.replace("Z", "+00:00"))
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=MAX_INACTIVE_DAYS)
         return updated_at >= cutoff_date
     except Exception:
@@ -39,11 +39,11 @@ def log_run_start():
     """Registra el inicio de una ejecución en run_history y devuelve el run_id."""
     conn = init_db()
     c = conn.cursor()
-    c.execute('SELECT COUNT(*) FROM repos')
+    c.execute("SELECT COUNT(*) FROM repos")
     repos_before = c.fetchone()[0]
     c.execute(
         "INSERT INTO run_history (started_at, repos_before, status) VALUES (?, ?, 'running')",
-        (datetime.now(timezone.utc).isoformat(), repos_before)
+        (datetime.now(timezone.utc).isoformat(), repos_before),
     )
     run_id = c.lastrowid
     conn.commit()
@@ -51,19 +51,26 @@ def log_run_start():
     return run_id, repos_before
 
 
-def log_run_finish(run_id, repos_inserted, repos_filtered, min_stars, status='completed'):
+def log_run_finish(run_id, repos_inserted, repos_filtered, min_stars, status="completed"):
     """Registra la finalización de una ejecución en run_history."""
     conn = init_db()
     c = conn.cursor()
-    c.execute('SELECT COUNT(*) FROM repos')
+    c.execute("SELECT COUNT(*) FROM repos")
     repos_after = c.fetchone()[0]
     c.execute(
         """UPDATE run_history
            SET finished_at = ?, repos_after = ?, repos_inserted = ?,
                repos_filtered = ?, min_stars_scanned = ?, status = ?
            WHERE id = ?""",
-        (datetime.now(timezone.utc).isoformat(), repos_after,
-         repos_inserted, repos_filtered, min_stars, status, run_id)
+        (
+            datetime.now(timezone.utc).isoformat(),
+            repos_after,
+            repos_inserted,
+            repos_filtered,
+            min_stars,
+            status,
+            run_id,
+        ),
     )
     conn.commit()
     conn.close()
@@ -81,10 +88,10 @@ def fetch_top_repos(min_stars=500):
         print("❌ Error: GITHUB_TOKEN no encontrado en .env")
         return
 
-    url = 'https://api.github.com/graphql'
+    url = "https://api.github.com/graphql"
     headers = {
-        'Authorization': f'Bearer {GITHUB_TOKEN}',
-        'Content-Type': 'application/json',
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Content-Type": "application/json",
     }
 
     query = """
@@ -106,7 +113,11 @@ def fetch_top_repos(min_stars=500):
     """
 
     run_id, repos_before = log_run_start()
-    logger.info("Iniciando escaneo desde Top 1 hasta {} estrellas (repos actuales: {})", min_stars, repos_before)
+    logger.info(
+        "Iniciando escaneo desde Top 1 hasta {} estrellas (repos actuales: {})",
+        min_stars,
+        repos_before,
+    )
 
     current_max_stars = 9999999  # Siempre desde el Top 1 en producción
     total_fetched = 0
@@ -126,8 +137,9 @@ def fetch_top_repos(min_stars=500):
                 try:
                     with httpx.Client(timeout=httpx.Timeout(30.0, connect=15.0)) as client:
                         response = client.post(
-                            url, headers=headers,
-                            json={'query': query, 'variables': variables},
+                            url,
+                            headers=headers,
+                            json={"query": query, "variables": variables},
                         )
                 except httpx.RequestError as e:
                     consecutive_errors += 1
@@ -152,51 +164,57 @@ def fetch_top_repos(min_stars=500):
                     continue
 
                 data = response.json()
-                if 'errors' in data:
-                    for err in data['errors']:
-                        logger.error("GraphQL error: {}", err.get('message', 'desconocido'))
+                if "errors" in data:
+                    for err in data["errors"]:
+                        logger.error("GraphQL error: {}", err.get("message", "desconocido"))
                     time.sleep(10)
                     continue
 
-                search_data = data['data']['search']
-                edges = search_data['edges']
+                search_data = data["data"]["search"]
+                edges = search_data["edges"]
 
                 if not edges:
                     break
 
                 repos_to_insert = []
                 for edge in edges:
-                    node = edge['node']
-                    stars = node['stargazerCount']
+                    node = edge["node"]
+                    stars = node["stargazerCount"]
                     last_repo_stars = stars
 
                     # Filtro 1: Archivados
-                    if node.get('isArchived', False):
+                    if node.get("isArchived", False):
                         total_skipped += 1
                         continue
 
                     # Filtro 2: 500-999 estrellas sin actividad reciente
-                    if not is_active_repo(node['updatedAt'], stars):
+                    if not is_active_repo(node["updatedAt"], stars):
                         total_skipped += 1
                         continue
 
-                    topics = [
-                        t['topic']['name']
-                        for t in node.get('repositoryTopics', {}).get('nodes', [])
-                    ] if node.get('repositoryTopics') else []
+                    topics = (
+                        [
+                            t["topic"]["name"]
+                            for t in node.get("repositoryTopics", {}).get("nodes", [])
+                        ]
+                        if node.get("repositoryTopics")
+                        else []
+                    )
 
-                    lang = node.get('primaryLanguage')
-                    repos_to_insert.append({
-                        'id': node['id'],
-                        'name': node['name'],
-                        'owner': node['owner']['login'],
-                        'description': node['description'],
-                        'url': node['url'],
-                        'stars': stars,
-                        'language': lang.get('name', '') if lang else '',
-                        'topics': topics,
-                        'updated_at': node['updatedAt'],
-                    })
+                    lang = node.get("primaryLanguage")
+                    repos_to_insert.append(
+                        {
+                            "id": node["id"],
+                            "name": node["name"],
+                            "owner": node["owner"]["login"],
+                            "description": node["description"],
+                            "url": node["url"],
+                            "stars": stars,
+                            "language": lang.get("name", "") if lang else "",
+                            "topics": topics,
+                            "updated_at": node["updatedAt"],
+                        }
+                    )
 
                 if repos_to_insert:
                     upsert_repos(repos_to_insert)
@@ -208,8 +226,8 @@ def fetch_top_repos(min_stars=500):
                     f"Estrellas actuales: {last_repo_stars:,}"
                 )
 
-                has_next_page = search_data['pageInfo']['hasNextPage']
-                cursor = search_data['pageInfo']['endCursor']
+                has_next_page = search_data["pageInfo"]["hasNextPage"]
+                cursor = search_data["pageInfo"]["endCursor"]
                 time.sleep(0.5)  # Respetar rate-limit de GitHub
 
             # GitHub GraphQL devuelve max 1000 resultados por búsqueda.
@@ -218,26 +236,30 @@ def fetch_top_repos(min_stars=500):
 
     except KeyboardInterrupt:
         logger.warning("Proceso interrumpido por el usuario")
-        log_run_finish(run_id, total_fetched, total_skipped, min_stars, status='interrupted')
+        log_run_finish(run_id, total_fetched, total_skipped, min_stars, status="interrupted")
         return
     except Exception as e:
         logger.error("Error fatal: {}", e)
-        log_run_finish(run_id, total_fetched, total_skipped, min_stars, status='failed')
+        log_run_finish(run_id, total_fetched, total_skipped, min_stars, status="failed")
         return
 
-    log_run_finish(run_id, total_fetched, total_skipped, min_stars, status='completed')
-    logger.info("Escaneo completado: {} insertados, {} filtrados, {} total en BD",
-                total_fetched, total_skipped, total_fetched + repos_before)
+    log_run_finish(run_id, total_fetched, total_skipped, min_stars, status="completed")
+    logger.info(
+        "Escaneo completado: {} insertados, {} filtrados, {} total en BD",
+        total_fetched,
+        total_skipped,
+        total_fetched + repos_before,
+    )
 
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(
-        description='WheelSaver Scraper — Descarga repos top de GitHub con filtros de calidad'
+        description="WheelSaver Scraper — Descarga repos top de GitHub con filtros de calidad"
     )
     parser.add_argument(
-        '--min-stars', type=int, default=500,
-        help='Mínimo de estrellas (default: 500)'
+        "--min-stars", type=int, default=500, help="Mínimo de estrellas (default: 500)"
     )
     args = parser.parse_args()
     fetch_top_repos(min_stars=args.min_stars)

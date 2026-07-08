@@ -27,17 +27,39 @@ RAW_BASE = "https://raw.githubusercontent.com/EvanLi/Github-Ranking/master"
 ARCHIVOS = [
     "Top100/Top-100-stars.md",
     "Top100/Top-100-forks.md",
-    "Top100/ActionScript.md", "Top100/C.md", "Top100/CPP.md",
-    "Top100/CSS.md", "Top100/CSharp.md", "Top100/Clojure.md",
-    "Top100/CoffeeScript.md", "Top100/DM.md", "Top100/Dart.md",
-    "Top100/Elixir.md", "Top100/Go.md", "Top100/Groovy.md",
-    "Top100/HTML.md", "Top100/Haskell.md", "Top100/Java.md",
-    "Top100/JavaScript.md", "Top100/Julia.md", "Top100/Kotlin.md",
-    "Top100/Lua.md", "Top100/MATLAB.md", "Top100/Objective-C.md",
-    "Top100/PHP.md", "Top100/Perl.md", "Top100/PowerShell.md",
-    "Top100/Python.md", "Top100/R.md", "Top100/Ruby.md",
-    "Top100/Rust.md", "Top100/Scala.md", "Top100/Shell.md",
-    "Top100/Swift.md", "Top100/TeX.md", "Top100/TypeScript.md",
+    "Top100/ActionScript.md",
+    "Top100/C.md",
+    "Top100/CPP.md",
+    "Top100/CSS.md",
+    "Top100/CSharp.md",
+    "Top100/Clojure.md",
+    "Top100/CoffeeScript.md",
+    "Top100/DM.md",
+    "Top100/Dart.md",
+    "Top100/Elixir.md",
+    "Top100/Go.md",
+    "Top100/Groovy.md",
+    "Top100/HTML.md",
+    "Top100/Haskell.md",
+    "Top100/Java.md",
+    "Top100/JavaScript.md",
+    "Top100/Julia.md",
+    "Top100/Kotlin.md",
+    "Top100/Lua.md",
+    "Top100/MATLAB.md",
+    "Top100/Objective-C.md",
+    "Top100/PHP.md",
+    "Top100/Perl.md",
+    "Top100/PowerShell.md",
+    "Top100/Python.md",
+    "Top100/R.md",
+    "Top100/Ruby.md",
+    "Top100/Rust.md",
+    "Top100/Scala.md",
+    "Top100/Shell.md",
+    "Top100/Swift.md",
+    "Top100/TeX.md",
+    "Top100/TypeScript.md",
     "Top100/Vim-script.md",
 ]
 
@@ -54,13 +76,13 @@ def parse_md_table(text):
 
     pattern = re.compile(
         r"\|\s*\d+\s*\|"
-        r"\s*\[([^\]]+)\]\(([^)]+)\)\s*\|"   # name + url
-        r"\s*([\d,]+)\s*\|"                     # stars
-        r"\s*([\d,]+)\s*\|"                     # forks
-        r"\s*([^|]*?)\s*\|"                     # language
-        r"\s*([\d,]+)\s*\|"                     # open issues
-        r"\s*(.*?)\s*\|"                        # description
-        r"\s*(.*?)\s*\|"                        # last commit
+        r"\s*\[([^\]]+)\]\(([^)]+)\)\s*\|"  # name + url
+        r"\s*([\d,]+)\s*\|"  # stars
+        r"\s*([\d,]+)\s*\|"  # forks
+        r"\s*([^|]*?)\s*\|"  # language
+        r"\s*([\d,]+)\s*\|"  # open issues
+        r"\s*(.*?)\s*\|"  # description
+        r"\s*(.*?)\s*\|"  # last commit
     )
 
     for line in text.split("\n"):
@@ -97,16 +119,18 @@ def parse_md_table(text):
         except ValueError:
             continue
 
-        repos.append({
-            "name": name,
-            "owner": owner,
-            "description": desc,
-            "url": url,
-            "stars": stars,
-            "language": lang if lang and lang != "None" else "",
-            "topics": [],
-            "updated_at": updated_at,
-        })
+        repos.append(
+            {
+                "name": name,
+                "owner": owner,
+                "description": desc,
+                "url": url,
+                "stars": stars,
+                "language": lang if lang and lang != "None" else "",
+                "topics": [],
+                "updated_at": updated_at,
+            }
+        )
 
     return repos
 
@@ -160,7 +184,12 @@ def main():
         upsert_external_repos(batch)
 
     despues = get_stats()
-    logger.info("EvanLi: antes={} despues={} nuevos={}", antes['total_repos'], despues['total_repos'], despues['total_repos'] - antes['total_repos'])
+    logger.info(
+        "EvanLi: antes={} despues={} nuevos={}",
+        antes["total_repos"],
+        despues["total_repos"],
+        despues["total_repos"] - antes["total_repos"],
+    )
 
 
 if __name__ == "__main__":

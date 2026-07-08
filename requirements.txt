@@ -7,10 +7,16 @@ fastapi
 uvicorn[standard]
 python-dotenv
 loguru
-
-# Web dashboard (pip install -e ".[web]")
-streamlit
-pandas
+aiosqlite
+# Infrastructure / Architecture
+async-lru
+gunicorn
+celery
+redis
+typesense
 
 # Development (pip install -e ".[dev]")
 pytest
+pytest-asyncio
+pytest-cov
+ruff

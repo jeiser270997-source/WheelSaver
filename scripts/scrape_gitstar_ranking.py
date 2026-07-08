@@ -37,8 +37,8 @@ def parse_repos_from_html(html):
 
     pattern = re.compile(
         r'<a\s+class="list-group-item\s*paginated_item"[^>]*href="/([^"/]+/[^"/]+)"[^>]*>'
-        r'(.*?)'
-        r'</a>',
+        r"(.*?)"
+        r"</a>",
         re.DOTALL,
     )
 
@@ -56,7 +56,7 @@ def parse_repos_from_html(html):
         seen.add(key)
 
         stars_match = re.search(
-            r'stargazers_count[^>]*>\s*(?:<i[^>]*></i>\s*)?([\d,]+)\s*<',
+            r"stargazers_count[^>]*>\s*(?:<i[^>]*></i>\s*)?([\d,]+)\s*<",
             inner,
         )
         stars = int(stars_match.group(1).replace(",", "")) if stars_match else 0
@@ -68,7 +68,7 @@ def parse_repos_from_html(html):
         description = desc_match.group(1).strip() if desc_match else ""
 
         lang_match = re.search(
-            r'repo-language[^>]*>.*?label[^>]*>\s*([^<]+?)\s*<', inner, re.DOTALL
+            r"repo-language[^>]*>.*?label[^>]*>\s*([^<]+?)\s*<", inner, re.DOTALL
         )
         language = ""
         if lang_match:
@@ -76,16 +76,18 @@ def parse_repos_from_html(html):
             if lang_text != "No language available":
                 language = lang_text
 
-        repos.append({
-            "name": name,
-            "owner": owner,
-            "description": description,
-            "url": f"https://github.com/{owner}/{name}",
-            "stars": stars,
-            "language": language,
-            "topics": [],
-            "updated_at": "",
-        })
+        repos.append(
+            {
+                "name": name,
+                "owner": owner,
+                "description": description,
+                "url": f"https://github.com/{owner}/{name}",
+                "stars": stars,
+                "language": language,
+                "topics": [],
+                "updated_at": "",
+            }
+        )
 
     return repos
 
@@ -94,15 +96,15 @@ def scrape_gitstar(start_page=1, max_pages=None):
     """Scrapea gitstar-ranking.com desde start_page hasta max_pages."""
     total_pages = max_pages if max_pages else (TOTAL_PAGES - start_page + 1)
 
-    logger.info("Scrapeando gitstar-ranking.com: paginas {} a {}", start_page, start_page + total_pages - 1)
+    logger.info(
+        "Scrapeando gitstar-ranking.com: paginas {} a {}", start_page, start_page + total_pages - 1
+    )
 
     all_repos = []
     page = start_page
     consecutive_errors = 0
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
     with httpx.Client(timeout=30.0, headers=headers) as client:
         pages_range = range(page, min(page + total_pages, TOTAL_PAGES + 1))
@@ -116,7 +118,13 @@ def scrape_gitstar(start_page=1, max_pages=None):
             except httpx.RequestError as e:
                 consecutive_errors += 1
                 wait = min(30, consecutive_errors * 5)
-                logger.warning("Error pagina {}: {} (esperando {}s, intento {})", page_num, e, wait, consecutive_errors)
+                logger.warning(
+                    "Error pagina {}: {} (esperando {}s, intento {})",
+                    page_num,
+                    e,
+                    wait,
+                    consecutive_errors,
+                )
                 time.sleep(wait)
                 if consecutive_errors > 3:
                     logger.error("Demasiados errores en gitstar, abortando")
@@ -168,7 +176,12 @@ def main():
         upsert_external_repos(batch)
 
     despues = get_stats()
-    logger.info("Gitstar: antes={} despues={} nuevos={}", antes['total_repos'], despues['total_repos'], despues['total_repos'] - antes['total_repos'])
+    logger.info(
+        "Gitstar: antes={} despues={} nuevos={}",
+        antes["total_repos"],
+        despues["total_repos"],
+        despues["total_repos"] - antes["total_repos"],
+    )
 
 
 if __name__ == "__main__":

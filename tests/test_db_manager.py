@@ -84,6 +84,7 @@ def test_get_stats(db_with_data):
 
     # Parcheamos para usar la BD in-memory
     import scraper.db_manager as dbm
+
     original_path = dbm.DB_PATH
     dbm.DB_PATH = ":memory:"
 
@@ -128,9 +129,17 @@ def test_upsert_repos_insert(db_conn):
                description=excluded.description, url=excluded.url,
                stars=excluded.stars, language=excluded.language,
                topics=excluded.topics, updated_at=excluded.updated_at""",
-        (repo["id"], repo["name"], repo["owner"], repo["description"],
-         repo["url"], repo["stars"], repo["language"], topics_str,
-         repo["updated_at"]),
+        (
+            repo["id"],
+            repo["name"],
+            repo["owner"],
+            repo["description"],
+            repo["url"],
+            repo["stars"],
+            repo["language"],
+            topics_str,
+            repo["updated_at"],
+        ),
     )
     db_conn.commit()
 

@@ -12,5 +12,5 @@ COPY . .
 # Expose API port
 EXPOSE 8000
 
-# Default command: launch API
-CMD ["python", "cli.py", "api", "--host", "0.0.0.0", "--port", "8000"]
+# Default command: launch API in production mode with Gunicorn
+CMD ["gunicorn", "api.main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
