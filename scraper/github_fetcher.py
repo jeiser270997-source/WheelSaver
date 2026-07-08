@@ -1,6 +1,6 @@
 import os
 import sqlite3
-import requests
+import httpx
 import time
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
@@ -124,12 +124,12 @@ def fetch_top_repos(min_stars=500):
                 variables = {"queryString": query_string, "cursor": cursor}
 
                 try:
-                    response = requests.post(
-                        url, headers=headers,
-                        json={'query': query, 'variables': variables},
-                        timeout=30
-                    )
-                except requests.exceptions.RequestException as e:
+                    with httpx.Client(timeout=httpx.Timeout(30.0, connect=15.0)) as client:
+                        response = client.post(
+                            url, headers=headers,
+                            json={'query': query, 'variables': variables},
+                        )
+                except httpx.RequestError as e:
                     consecutive_errors += 1
                     wait = min(60, consecutive_errors * 5)
                     print(f"⚠️ Error de conexión: {e}. Reintentando en {wait}s... (intento {consecutive_errors})")

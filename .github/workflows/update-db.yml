@@ -24,22 +24,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Scrape GitHub GraphQL API (Top 1 → 500⭐)
+      - name: Run GitHub GraphQL Scraper
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_GITHUB_TOKEN }}
         run: |
           export PYTHONPATH=$(pwd)
-          python scraper/github_fetcher.py
+          python cli.py scrape --min-stars 500
 
-      - name: Import from EvanLi/Github-Ranking (Top 100 por lenguaje)
+      - name: Import from EvanLi/Github-Ranking
         run: |
           export PYTHONPATH=$(pwd)
-          python scripts/import_from_evanli.py
+          python cli.py import evanli
 
-      - name: Scrape gitstar-ranking.com (Top ~5,000 repos)
+      - name: Scrape gitstar-ranking.com
         run: |
           export PYTHONPATH=$(pwd)
-          python scripts/scrape_gitstar_ranking.py
+          python cli.py import gitstar
 
       - name: Commit and Push Changes
         run: |

@@ -1,2 +1,9 @@
 requests
 python-dotenv
+httpx
+typer
+rich
+tqdm
+fastapi
+uvicorn[standard]
+pytest

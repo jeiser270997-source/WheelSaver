@@ -7,15 +7,16 @@ Se actualiza a diario via GitHub Actions.
 
 Uso:
     python scripts/import_from_evanli.py
+    python cli.py import evanli
 """
 
 import re
 import sys
 import os
 import time
-from datetime import datetime, timezone
 
-import requests
+import httpx
+from tqdm import tqdm
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scraper.db_manager import upsert_external_repos, get_stats
@@ -23,10 +24,8 @@ from scraper.db_manager import upsert_external_repos, get_stats
 RAW_BASE = "https://raw.githubusercontent.com/EvanLi/Github-Ranking/master"
 
 ARCHIVOS = [
-    # Global
     "Top100/Top-100-stars.md",
     "Top100/Top-100-forks.md",
-    # Por lenguaje
     "Top100/ActionScript.md", "Top100/C.md", "Top100/CPP.md",
     "Top100/CSS.md", "Top100/CSharp.md", "Top100/Clojure.md",
     "Top100/CoffeeScript.md", "Top100/DM.md", "Top100/Dart.md",
@@ -46,13 +45,12 @@ def parse_md_table(text):
     """
     Parsea la tabla Markdown de EvanLi.
 
-    Formato de cada fila:
+    Formato:
     | # | [name](url) | stars | forks | language | issues | description | last_commit |
     """
     repos = []
     seen = set()
 
-    # Regex para linea de tabla: | pos | [name](url) | stars | forks | lang | issues | desc | fecha |
     pattern = re.compile(
         r"\|\s*\d+\s*\|"
         r"\s*\[([^\]]+)\]\(([^)]+)\)\s*\|"   # name + url
@@ -82,7 +80,6 @@ def parse_md_table(text):
             continue
         seen.add(key)
 
-        # Extraer owner desde la URL: https://github.com/owner/name
         owner = ""
         try:
             parts = url.rstrip("/").split("/")
@@ -113,36 +110,37 @@ def parse_md_table(text):
     return repos
 
 
-def fetch_and_parse(url, label):
+def fetch_and_parse(url, label, client):
     """Descarga un archivo Markdown y parsea los repos."""
     try:
-        resp = requests.get(url, timeout=30)
+        resp = client.get(url)
         resp.raise_for_status()
         repos = parse_md_table(resp.text)
-        print(f"  {label}: {len(repos)} repos extraidos")
         return repos
-    except requests.RequestException as e:
-        print(f"  {label}: ERROR - {e}")
+    except httpx.RequestError as e:
+        print(f"  {label}: ERROR de conexion - {e}")
+        return []
+    except httpx.HTTPStatusError as e:
+        print(f"  {label}: HTTP {e.response.status_code}")
         return []
 
 
 def main():
-    print("=" * 60)
-    print("  EvanLi/Github-Ranking — Importador")
-    print("=" * 60)
+    print("EvanLi/Github-Ranking — Importador")
+    print(f"Archivos a procesar: {len(ARCHIVOS)}\n")
 
     antes = get_stats()
-    print(f"\nRepos antes de la importacion: {antes['total_repos']:,}\n")
-
     todos = []
-    for archivo in ARCHIVOS:
-        url = f"{RAW_BASE}/{archivo}"
-        label = archivo.replace("Top100/", "").replace(".md", "")
-        repos = fetch_and_parse(url, label)
-        todos.extend(repos)
-        time.sleep(0.3)  # Rate-limit light
 
-    # Deduplicar por nombre (priorizar datos mas completos)
+    with httpx.Client(timeout=30.0) as client:
+        for archivo in tqdm(ARCHIVOS, desc="EvanLi", unit="archivo"):
+            url = f"{RAW_BASE}/{archivo}"
+            label = archivo.replace("Top100/", "").replace(".md", "")
+            repos = fetch_and_parse(url, label, client)
+            todos.extend(repos)
+            time.sleep(0.3)
+
+    # Deduplicar
     unicos = {}
     for r in todos:
         key = r["name"].lower()
@@ -156,19 +154,13 @@ def main():
         print("No se encontraron repos. Abortando.")
         return
 
-    # Importar en batches de 100 para no saturar la BD
     BATCH = 100
     for i in range(0, len(final), BATCH):
         batch = final[i : i + BATCH]
         upsert_external_repos(batch)
-        print(f"  Batch {i//BATCH + 1}: {len(batch)} repos insertados/actualizados")
 
     despues = get_stats()
-    print(f"\nResumen final:")
-    print(f"  Antes:  {antes['total_repos']:,} repos")
-    print(f"  Despues: {despues['total_repos']:,} repos")
-    print(f"  Nuevos: {despues['total_repos'] - antes['total_repos']:,}")
-    print(f"  Listo!")
+    print(f"Antes: {antes['total_repos']:,} | Despues: {despues['total_repos']:,} | Nuevos: {despues['total_repos'] - antes['total_repos']:,}")
 
 
 if __name__ == "__main__":

@@ -13,11 +13,6 @@ def make_repo_id(owner, name):
     raw = f"{owner.lower()}/{name.lower()}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
-def dict_factory(cursor, row):
-    d = {}
-    for idx, col in enumerate(cursor.description):
-        d[col[0]] = row[idx]
-    return d
 
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
