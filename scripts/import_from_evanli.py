@@ -17,6 +17,7 @@ import time
 
 import httpx
 from tqdm import tqdm
+from loguru import logger
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scraper.db_manager import upsert_external_repos, get_stats
@@ -118,16 +119,15 @@ def fetch_and_parse(url, label, client):
         repos = parse_md_table(resp.text)
         return repos
     except httpx.RequestError as e:
-        print(f"  {label}: ERROR de conexion - {e}")
+        logger.error("Error conexion {}: {}", label, e)
         return []
     except httpx.HTTPStatusError as e:
-        print(f"  {label}: HTTP {e.response.status_code}")
+        logger.warning("HTTP {} en {}", e.response.status_code, label)
         return []
 
 
 def main():
-    print("EvanLi/Github-Ranking — Importador")
-    print(f"Archivos a procesar: {len(ARCHIVOS)}\n")
+    logger.info("Importando desde EvanLi/Github-Ranking ({} archivos)", len(ARCHIVOS))
 
     antes = get_stats()
     todos = []
@@ -151,7 +151,7 @@ def main():
     print(f"\nTotal crudo: {len(todos)} | Despues de dedup: {len(final)}")
 
     if not final:
-        print("No se encontraron repos. Abortando.")
+        logger.warning("No se encontraron repos en EvanLi")
         return
 
     BATCH = 100
@@ -160,7 +160,7 @@ def main():
         upsert_external_repos(batch)
 
     despues = get_stats()
-    print(f"Antes: {antes['total_repos']:,} | Despues: {despues['total_repos']:,} | Nuevos: {despues['total_repos'] - antes['total_repos']:,}")
+    logger.info("EvanLi: antes={} despues={} nuevos={}", antes['total_repos'], despues['total_repos'], despues['total_repos'] - antes['total_repos'])
 
 
 if __name__ == "__main__":

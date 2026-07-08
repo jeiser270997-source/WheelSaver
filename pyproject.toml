@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wheelsaver"
+version = "3.2.0"
+description = "GitHub repo scraper + AI audit tool. Search 23k+ repos offline, audit projects via AI."
+readme = "README.md"
+license = {text = "MIT"}
+keywords = ["github", "scraper", "ai", "audit", "cli"]
+requires-python = ">=3.10"
+dependencies = [
+    "httpx",
+    "typer",
+    "rich",
+    "tqdm",
+    "fastapi",
+    "uvicorn[standard]",
+    "python-dotenv",
+    "loguru",
+]
+
+[project.optional-dependencies]
+web = ["streamlit", "pandas"]
+dev = ["pytest"]
+
+[project.urls]
+Homepage = "https://github.com/JeisarGtz/Top_Repos"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

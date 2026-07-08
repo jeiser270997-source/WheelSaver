@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  wheelsaver:
+    build: .
+    container_name: wheelsaver
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    command: python cli.py api --host 0.0.0.0 --port 8000

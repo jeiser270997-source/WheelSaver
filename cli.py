@@ -14,6 +14,7 @@ Uso:
 """
 
 import re
+import os
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -173,6 +174,37 @@ def api(
     console.print(f"[bold blue]Lanzando API en http://{host}:{port}[/bold blue]")
     console.print("[dim]Documentacion: http://localhost:" + str(port) + "/docs[/dim]")
     uvicorn.run("api.main:app", host=host, port=port, reload=True)
+
+
+@app.command()
+def docker():
+    """Levanta WheelSaver en Docker (docker compose up)."""
+    import subprocess, sys
+
+    console.print("[bold blue]Levantando WheelSaver con Docker...[/bold blue]")
+    result = subprocess.run(
+        [sys.executable, "-m", "docker", "compose", "up", "--build", "-d"],
+        capture_output=True, text=True, cwd=os.path.dirname(os.path.abspath(__file__)),
+    )
+    if result.returncode == 0:
+        console.print("[bold green]WheelSaver corriendo en http://localhost:8000[/bold green]")
+        console.print("[dim]Para ver logs: docker compose logs -f[/dim]")
+        console.print("[dim]Para detener: docker compose down[/dim]")
+    else:
+        console.print("[red]Error al levantar Docker:[/red]")
+        console.print(result.stderr or result.stdout)
+
+
+@app.command()
+def dashboard():
+    """Lanza el dashboard web con Streamlit."""
+    import subprocess, sys
+
+    console.print("[bold blue]Lanzando dashboard Streamlit...[/bold blue]")
+    subprocess.run(
+        [sys.executable, "-m", "streamlit", "run", "dashboard.py"],
+        cwd=os.path.dirname(os.path.abspath(__file__)),
+    )
 
 
 @app.command()
@@ -337,4 +369,8 @@ def swap(
 
 
 if __name__ == "__main__":
+    # Shell completion (Typer nativo):
+    #   python cli.py --install-completion  → instala autocompletado
+    #   python cli.py --show-completion     → muestra script de completion
     app()
+

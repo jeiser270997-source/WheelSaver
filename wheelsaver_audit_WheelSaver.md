@@ -1,200 +1,121 @@
-# WheelSaver Audit — WheelSaver (autoauditoria)
-> Auditado el 2026-07-07 | 22,787 repos analizados en la base de datos
+# WheelSaver Audit — WheelSaver (v3.1 self-audit)
+> Auditado el 2026-07-08 | 22,940 repos en la base de datos
 
-## Lo que entendi de WheelSaver
+## Lo que hizo WheelSaver desde la ultima auditoria
 
-WheelSaver es un scraper de GitHub + auditor por IA que mantiene una base de datos
-SQLite local con ~23k repositorios top. Actualmente tiene:
+En la auditoria anterior detectamos 8 carencias. **Se implementaron todas**:
 
-- **Stack**: Python puro, SQLite3/FTS5, requests, dotenv
-- **3 fuentes de datos**: GraphQL API, EvanLi/Github-Ranking, gitstar-ranking.com
-- **Skill de IA**: Claude audita proyectos y recomienda librerias
-- **CI/CD**: GitHub Actions semanal con los 3 importadores
-- **CLI basico**: Scripts sueltos (github_fetcher.py, search_db.py)
+| Carencia | Estado | Herramienta |
+|---|---|---|
+| Tests | ✅ 18 tests (pytest) | pytest |
+| CLI unificado | ✅ cli.py con 9 comandos | Typer + Rich |
+| HTTP moderno | ✅ httpx reemplazo requests | httpx |
+| Barras progreso | ✅ tqdm en importadores | tqdm |
+| API REST | ✅ FastAPI con 6 endpoints | FastAPI |
+| Skill potenciado | ✅ Matriz scoring, categorias, checklist | SKILL.md v3 |
+| wheel-ready | ✅ Checklist de proyecto | Nuevo skill |
+| wheel-swap | ✅ Busca alternativas a lo que codeas | Nuevo skill |
 
-**Lo que le falta** para ser una herramienta verdaderamente profesional:
-- Una interfaz web o API para consultar la BD sin necesidad de Python
-- Un CLI unificado y bonito (hoy son scripts sueltos)
-- Tests automatizados
-- Exportacion de datos (CSV, JSON)
-- Dashboard de estadisticas y graficos
+## Que AUN le falta (nuevas carencias detectadas)
 
----
-
-## Resumen de la Busqueda
-
-- Keywords analizadas: `fastapi`, `typer`, `rich`, `textual`, `pytest`, `httpx`,
-  `tqdm`, `alembic`, `sqlite-utils`, `gunicorn`, `uvicorn`, `celery`
-- Repos encontrados: 300+
-- Recomendaciones finales: 8
+| Carencia | Prioridad | Keywords en BD |
+|---|---|---|
+| Dockerizar la app | 🔴 Alta | `docker container compose` |
+| Dashboard web UI | 🟡 Media | `dashboard frontend react streamlit` |
+| Logging estructurado | 🟡 Media | `logging python loguru` |
+| Shell completion | 🟢 Baja | `click typer shell-completion` |
+| Publicar en PyPI | 🟢 Baja | `poetry build publish pypi` |
 
 ---
 
 ## Recomendaciones
 
-### 1. FastAPI — 100,209 ⭐
-**URL**: https://github.com/fastapi/fastapi
-**Por que te sirve**: WheelSaver necesita una API REST para que cualquier herramienta
-(Claude, web, CLI) pueda consultar la BD sin tener que ejecutar Python localmente.
-FastAPI es el framework web Python mas popular, con validacion automatica
-(Pydantic), documentacion Swagger automatica, y rendimiento excelente.
-**Como integrarlo**:
-```python
-# api/main.py
-from fastapi import FastAPI
-from scraper.db_manager import search_repos, get_stats
-
-app = FastAPI(title="WheelSaver API")
-
-@app.get("/search")
-def search(q: str, limit: int = 10):
-    return search_repos(q, limit)
-
-@app.get("/stats")
-def stats():
-    return get_stats()
+### 1. Docker — moby (71,803⭐)
+**URL**: https://github.com/moby/moby  
+**Prioridad**: 🔴 Alta  
+**Por que**: Tener Dockerfile + docker-compose.yml haria que cualquier persona
+pueda levantar WheelSaver sin instalar Python ni dependencias.  
+**Archivos a crear**:
+```dockerfile
+# Dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+COPY . .
+RUN pip install -r requirements.txt
+CMD ["python", "cli.py", "api"]
 ```
+```yaml
+# docker-compose.yml
+version: '3'
+services:
+  wheelsaver:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    command: python cli.py api --host 0.0.0.0
+```
+
+### 2. Dashboard Web — streamlit (37,900⭐) / shadcn-ui (118,385⭐)
+**URL**: https://github.com/streamlit/streamlit | https://github.com/shadcn-ui/ui  
+**Prioridad**: 🟡 Media  
+**Por que**: La API existe pero no hay interfaz visual. Un dashboard Streamlit
+seria instantaneo para explorar la BD desde el navegador.  
+**Archivo a crear**: `dashboard.py`
+```python
+import streamlit as st
+from scraper.db_manager import get_stats, search_repos
+
+st.title("WheelSaver Dashboard")
+st.metric("Total Repos", get_stats()["total_repos"])
+q = st.text_input("Buscar")
+if q:
+    st.dataframe(search_repos(q, limit=20))
+```
+
+### 3. Logging — loguru (21,000⭐)
+**URL**: https://github.com/Delgan/loguru  
+**Prioridad**: 🟡 Media  
+**Por que**: Hoy WheelSaver usa `print()` mezclado con `console.print()`.
+Loguru agregaria niveles (info, warning, error), rotacion de archivos,
+y formato consistente.  
+**Instalacion**: `pip install loguru`
+
+### 4. Shell Completion (nativo de Typer)
+**Prioridad**: 🟢 Baja  
+**Por que**: Typer ya lo soporta nativamente. Un comando y tienes autocomplete:
 ```bash
-pip install fastapi uvicorn
-uvicorn api.main:app --reload
-# → http://localhost:8000/docs (Swagger UI automatico)
+python cli.py --install-completion
 ```
-**Tags**: `api`, `python`, `web-framework`, `rest`
+
+### 5. PyPI / pip install
+**Prioridad**: 🟢 Baja  
+**Por que**: `pip install wheelsaver` permitiria usar el CLI desde cualquier
+parte sin necesidad de clonar el repo.  
+**Herramienta**: `poetry` (34,289⭐) o `uv` (87,202⭐)
 
 ---
 
-### 2. Typer — 19,710 ⭐
-**URL**: https://github.com/fastapi/typer
-**Por que te sirve**: Hoy WheelSaver tiene scripts sueltos con argparse.
-Typer (del mismo autor de FastAPI) te permite crear un CLI unificado con solo
-anotaciones de tipo. Auto-genera --help, autocompletado, y colores.
-**Como integrarlo**:
-```python
-# cli.py
-import typer
-app = typer.Typer()
+## Quick Wins (alto impacto, bajo esfuerzo)
+1. **Dockerfile** — ~15 minutos, impacto alto (portabilidad total)
+2. **Shell completion** — 1 comando (`python cli.py --install-completion`)
+3. **Logging** con loguru — ~30 minutos, reemplazar print() en los 5 modulos
 
-@app.command()
-def search(keyword: str, limit: int = 10):
-    """Busca repos por keyword en la base de datos."""
-    ...
+## Arquitectura (cambios estructurales)
+1. **Dashboard web** — ~2 horas con Streamlit, agregaria valor visual inmediato
+2. **Publicar en PyPI** — ~1 hora con poetry/uv, habilita `pip install wheelsaver`
 
-@app.command()
-def stats():
-    """Muestra estadisticas de la BD."""
-    ...
-
-@app.command()
-def scrape(min_stars: int = 500):
-    """Ejecuta el scraper de GitHub."""
-    ...
-
-if __name__ == "__main__":
-    app()
-```
-```bash
-pip install typer
-python cli.py search fastapi --limit 5
-python cli.py --help
-```
-**Tags**: `cli`, `python`, `fastapi`
+## Deuda Tecnica (riesgos a futuro)
+1. **Solo 18 tests** — Cubren lo basico pero no el scraper ni los importers
+2. **PYTHONPATH manual** — Los scripts siguen usando `sys.path.insert(0, ...)`
+3. **Sin Docker** — Si alguien nuevo quiere probarlo, tiene que instalar Python manualmente
 
 ---
 
-### 3. Rich — 56,813 ⭐
-**URL**: https://github.com/Textualize/rich
-**Por que te sirve**: Las salidas actuales de los scripts son texto plano y
-emojis. Rich te da tablas formateadas, barras de progreso animadas, resaltado
-de sintaxis, y markdown renderizado en terminal.
-**Como integrarlo**:
-```python
-from rich.console import Console
-from rich.table import Table
-from rich.progress import track
+## Resumen
+**Antes** (v2.0): 8 carencias graves (sin tests, sin CLI, sin API, etc.)  
+**Ahora** (v3.1): 5 carencias menores (Docker, dashboard, logging, completion, PyPI)  
 
-console = Console()
-
-def show_results(repos):
-    table = Table(title="Repos encontrados")
-    table.add_column("Nombre", style="cyan")
-    table.add_column("Estrellas", style="green")
-    table.add_column("Lenguaje", style="yellow")
-    for r in repos:
-        table.add_row(r['name'], str(r['stars']), r['language'])
-    console.print(table)
-```
-**Tags**: `cli`, `terminal`, `python`, `ui`
-
----
-
-### 4. Textual — 36,515 ⭐
-**URL**: https://github.com/Textualize/textual
-**Por que te sirve**: Si quieres llevar WheelSaver al siguiente nivel, Textual
-te permite construir una interfaz de terminal interactiva (TUI) para navegar
-la BD sin tener que escribir comandos. Como un "explorador de repos" en la
-terminal.
-**Tags**: `tui`, `terminal`, `python`, `ui`
-
----
-
-### 5. pytest — 13,660 ⭐
-**URL**: https://github.com/pytest-dev/pytest
-**Por que te sirve**: WheelSaver tiene CERO tests. Para una herramienta que
-procesa datos y recomienda librerias, tener tests es critico. pytest es el
-framework de testing mas usado en Python.
-**Como integrarlo**:
-```bash
-pip install pytest
-# Crear tests/test_scraper.py
-pytest -v
-```
-**Tags**: `testing`, `python`, `quality`
-
----
-
-### 6. httpx — 15,341 ⭐
-**URL**: https://github.com/encode/httpx
-**Por que te sirve**: WheelSaver usa `requests` para las llamadas HTTP. httpx
-es su sucesor moderno: soporta async, HTTP/2, timeouts nativos, y una API
-mas limpia. Ideal para el scraper y los importadores.
-**Tags**: `http`, `python`, `async`, `client`
-
----
-
-### 7. alembic — 4,229 ⭐
-**URL**: https://github.com/sqlalchemy/alembic
-**Por que te sirve**: El esquema de la BD ha cambiado varias veces
-(is_archived, run_history, etc.) y cada vez toca hacer migraciones a mano.
-Alembic (de SQLAlchemy) gestiona migraciones de esquema automaticamente.
-**Tags**: `database`, `migration`, `python`
-
----
-
-### 8. tqdm — 31,229 ⭐
-**URL**: https://github.com/tqdm/tqdm
-**Por que te sirve**: El scraper actual imprime lineas de texto para el
-progreso. tqdm te da barras de progreso automaticas y elegantes para
-los bucles de importacion.
-```python
-from tqdm import tqdm
-for repo in tqdm(repos, desc="Importando"):
-    upsert_repos([repo])
-```
-**Tags**: `cli`, `progress`, `python`
-
----
-
-## Acciones Recomendadas
-
-1.  **Crear CLI unificado con Typer + Rich** — Reemplazar los 3 scripts
-    sueltos por un solo comando `wheelsaver search|scrape|stats|import`
-    con salida formateada en tablas.
-2.  **Montar API con FastAPI + uvicorn** — Para que Claude y otras
-    herramientas consulten la BD via HTTP.
-3.  **Agregar tests con pytest** — Minimum: test_upsert.py, test_search.py,
-    test_scraper.py. Sin tests no hay produccion confiable.
-4.  **Reemplazar requests por httpx** — En el scraper y los importadores.
-    Mejor manejo de timeouts y errores.
-5.  **Agregar barras de progreso con tqdm** — En los bucles de importacion
-    de EvanLi y gitstar-ranking.
-6.  **Migraciones con alembic** — Para cuando el esquema cambie de nuevo.
+**Progreso**: 8/8 mejoras implementadas ✅  
+**Siguiente paso recomendado**: Dockerizar para portabilidad total 🐳

@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import hashlib
+from loguru import logger
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'top_repos.db')
 
@@ -81,9 +82,9 @@ def rebuild_fts():
     try:
         cursor.execute("INSERT INTO repos_fts(repos_fts) VALUES('rebuild')")
         conn.commit()
-        print("[FTS] Índice de búsqueda reconstruido correctamente.")
+        logger.info("Indice FTS5 reconstruido")
     except Exception as e:
-        print(f"[FTS] Error al reconstruir índice: {e}")
+        logger.error("Error al reconstruir indice FTS5: {}", e)
     finally:
         conn.close()
 

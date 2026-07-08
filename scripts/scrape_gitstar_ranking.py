@@ -19,6 +19,7 @@ import time
 
 import httpx
 from tqdm import tqdm
+from loguru import logger
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scraper.db_manager import upsert_external_repos, get_stats
@@ -93,7 +94,7 @@ def scrape_gitstar(start_page=1, max_pages=None):
     """Scrapea gitstar-ranking.com desde start_page hasta max_pages."""
     total_pages = max_pages if max_pages else (TOTAL_PAGES - start_page + 1)
 
-    print(f"Scrapeando gitstar-ranking.com: pagina {start_page} a {start_page + total_pages - 1}")
+    logger.info("Scrapeando gitstar-ranking.com: paginas {} a {}", start_page, start_page + total_pages - 1)
 
     all_repos = []
     page = start_page
@@ -115,14 +116,14 @@ def scrape_gitstar(start_page=1, max_pages=None):
             except httpx.RequestError as e:
                 consecutive_errors += 1
                 wait = min(30, consecutive_errors * 5)
-                print(f"  Error pagina {page_num}: {e}. Esperando {wait}s...")
+                logger.warning("Error pagina {}: {} (esperando {}s, intento {})", page_num, e, wait, consecutive_errors)
                 time.sleep(wait)
                 if consecutive_errors > 3:
-                    print("  Demasiados errores consecutivos. Abortando.")
+                    logger.error("Demasiados errores en gitstar, abortando")
                     break
                 continue
             except httpx.HTTPStatusError as e:
-                print(f"  HTTP {e.response.status_code} en pagina {page_num}. Saltando.")
+                logger.warning("HTTP {} en pagina {}", e.response.status_code, page_num)
                 time.sleep(5)
                 continue
 
@@ -142,15 +143,14 @@ def main():
     parser.add_argument("--start", type=int, default=1, help="Pagina inicial")
     args = parser.parse_args()
 
-    print("gitstar-ranking.com — Scraper")
+    logger.info("Scrapeando gitstar-ranking.com")
     antes = get_stats()
-    print(f"Repos antes: {antes['total_repos']:,}\n")
 
     max_pages = args.pages if args.pages > 0 else None
     todos = scrape_gitstar(start_page=args.start, max_pages=max_pages)
 
     if not todos:
-        print("No se extrajeron repos. Abortando.")
+        logger.warning("No se extrajeron repos de gitstar")
         return
 
     unicos = {}
@@ -160,7 +160,7 @@ def main():
             unicos[key] = r
 
     final = list(unicos.values())
-    print(f"\nTotal crudo: {len(todos)} | Unicos: {len(final)}")
+    logger.info("Gitstar: {} crudos, {} unicos", len(todos), len(final))
 
     BATCH = 100
     for i in range(0, len(final), BATCH):
@@ -168,7 +168,7 @@ def main():
         upsert_external_repos(batch)
 
     despues = get_stats()
-    print(f"Antes: {antes['total_repos']:,} | Despues: {despues['total_repos']:,} | Nuevos: {despues['total_repos'] - antes['total_repos']:,}")
+    logger.info("Gitstar: antes={} despues={} nuevos={}", antes['total_repos'], despues['total_repos'], despues['total_repos'] - antes['total_repos'])
 
 
 if __name__ == "__main__":

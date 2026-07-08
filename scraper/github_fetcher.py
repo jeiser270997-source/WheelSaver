@@ -4,6 +4,7 @@ import httpx
 import time
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
+from loguru import logger
 from scraper.db_manager import upsert_repos, DB_PATH, init_db
 
 load_dotenv(override=True)
@@ -105,8 +106,7 @@ def fetch_top_repos(min_stars=500):
     """
 
     run_id, repos_before = log_run_start()
-    print(f"🚀 Iniciando escaneo completo de WheelSaver (Repos actuales: {repos_before:,})")
-    print(f"📡 Barriendo desde el Top 1 hasta {min_stars} estrellas (umbral de calidad: {QUALITY_FILTER_THRESHOLD})\n")
+    logger.info("Iniciando escaneo desde Top 1 hasta {} estrellas (repos actuales: {})", min_stars, repos_before)
 
     current_max_stars = 9999999  # Siempre desde el Top 1 en producción
     total_fetched = 0
@@ -132,28 +132,29 @@ def fetch_top_repos(min_stars=500):
                 except httpx.RequestError as e:
                     consecutive_errors += 1
                     wait = min(60, consecutive_errors * 5)
-                    print(f"⚠️ Error de conexión: {e}. Reintentando en {wait}s... (intento {consecutive_errors})")
+                    logger.warning("Error de conexion: {} (intento {})", e, consecutive_errors)
                     time.sleep(wait)
                     if consecutive_errors > 5:
+                        logger.error("Demasiados errores consecutivos, abortando")
                         raise
                     continue
 
                 consecutive_errors = 0  # Reset al tener éxito
 
                 if response.status_code == 403:
-                    print("⚠️ Rate-limit de GitHub alcanzado. Esperando 60s...")
+                    logger.warning("Rate-limit de GitHub alcanzado. Esperando 60s...")
                     time.sleep(60)
                     continue
                 elif response.status_code != 200:
                     wait = min(30, response.status_code * 2)
-                    print(f"⚠️ HTTP {response.status_code}. Esperando {wait}s...")
+                    logger.warning("HTTP {} recibido. Esperando {}s...", response.status_code, wait)
                     time.sleep(wait)
                     continue
 
                 data = response.json()
                 if 'errors' in data:
                     for err in data['errors']:
-                        print(f"⚠️ Error GraphQL: {err.get('message', 'desconocido')}")
+                        logger.error("GraphQL error: {}", err.get('message', 'desconocido'))
                     time.sleep(10)
                     continue
 
@@ -216,19 +217,17 @@ def fetch_top_repos(min_stars=500):
             current_max_stars = last_repo_stars - 1
 
     except KeyboardInterrupt:
-        print("\n🛑 Proceso interrumpido por el usuario.")
+        logger.warning("Proceso interrumpido por el usuario")
         log_run_finish(run_id, total_fetched, total_skipped, min_stars, status='interrupted')
         return
     except Exception as e:
-        print(f"\n💥 Error fatal: {e}")
+        logger.error("Error fatal: {}", e)
         log_run_finish(run_id, total_fetched, total_skipped, min_stars, status='failed')
         return
 
     log_run_finish(run_id, total_fetched, total_skipped, min_stars, status='completed')
-    print(f"\n🎉 ¡Escaneo completado!")
-    print(f"   • Repos actualizados/insertados: {total_fetched:,}")
-    print(f"   • Repos filtrados (archivados/inactivos): {total_skipped:,}")
-    print(f"   • Total en base de datos: {total_fetched + repos_before:,}")
+    logger.info("Escaneo completado: {} insertados, {} filtrados, {} total en BD",
+                total_fetched, total_skipped, total_fetched + repos_before)
 
 
 if __name__ == "__main__":

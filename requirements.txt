@@ -1,9 +1,16 @@
-requests
-python-dotenv
+# Core
 httpx
 typer
 rich
 tqdm
 fastapi
 uvicorn[standard]
+python-dotenv
+loguru
+
+# Web dashboard (pip install -e ".[web]")
+streamlit
+pandas
+
+# Development (pip install -e ".[dev]")
 pytest
