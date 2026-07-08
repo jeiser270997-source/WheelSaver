@@ -1,8 +1,9 @@
 import os
+import sqlite3
 import requests
 import time
 from dotenv import load_dotenv
-from scraper.db_manager import upsert_repos
+from scraper.db_manager import upsert_repos, DB_PATH
 
 load_dotenv(override=True)
 
@@ -55,9 +56,22 @@ def fetch_top_repos(target_count=10000):
     }
     """
 
+    # Detectar cuántos repos ya tenemos en la BD y desde dónde reanudar
     total_fetched = 0
-    # Empezamos buscando desde un número ridículamente alto hacia abajo
-    current_max_stars = 9999999 
+    current_max_stars = 9999999
+    try:
+        if os.path.exists(DB_PATH):
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute('SELECT COUNT(*), MIN(stars) FROM repos')
+            row = c.fetchone()
+            conn.close()
+            if row and row[0] > 0:
+                total_fetched = row[0]
+                current_max_stars = row[1]  # Reanudamos desde el mínimo de estrellas guardado
+                print(f"[RESUME] Reanudando desde {total_fetched} repos ya guardados. Último mínimo de estrellas: {current_max_stars:,}")
+    except Exception as e:
+        print(f"[INFO] No se pudo leer la BD para reanudar ({e}), comenzando desde cero.")
 
     print(f"Iniciando descarga masiva de {target_count} repositorios en tramos seguros...")
 
@@ -140,11 +154,15 @@ def fetch_top_repos(target_count=10000):
             # Si por alguna razón extraña todos los 1000 repos tenían exactamente la misma cantidad de estrellas
             current_max_stars -= 1
 
-        if current_max_stars < 50:
-            print("Se ha llegado a repositorios con muy pocas estrellas. Finalizando.")
+        if current_max_stars < 1000:
+            print("Se ha llegado al umbral minimo de 1,000 estrellas. Finalizando.")
             break
 
     print("¡Descarga masiva finalizada con éxito!")
 
 if __name__ == "__main__":
-    fetch_top_repos()
+    import argparse
+    parser = argparse.ArgumentParser(description='Descarga repositorios top de GitHub')
+    parser.add_argument('--target', type=int, default=10000, help='Cantidad de repositorios a descargar')
+    args = parser.parse_args()
+    fetch_top_repos(target_count=args.target)
