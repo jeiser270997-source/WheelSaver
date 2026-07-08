@@ -1,7 +1,17 @@
 import sqlite3
 import os
+import hashlib
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'top_repos.db')
+
+
+def make_repo_id(owner, name):
+    """
+    Genera un ID sintetico consistente para repos sin GitHub node ID.
+    Usa SHA-256 de 'owner/name' -> 16 chars hex.
+    """
+    raw = f"{owner.lower()}/{name.lower()}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 def dict_factory(cursor, row):
     d = {}
@@ -127,6 +137,18 @@ def upsert_repos(repos_list):
         pass
 
     conn.close()
+
+
+def upsert_external_repos(repos_list):
+    """
+    Como upsert_repos pero genera automaticamente un ID sintetico
+    a partir de (owner, name) para fuentes externas que no tienen
+    el GitHub node ID (EvanLi, gitstar-ranking, etc.).
+    """
+    for repo in repos_list:
+        if 'id' not in repo or not repo['id']:
+            repo['id'] = make_repo_id(repo['owner'], repo['name'])
+    upsert_repos(repos_list)
 
 
 def search_repos(keyword, limit=5):

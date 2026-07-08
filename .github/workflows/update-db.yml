@@ -9,7 +9,7 @@ on:
 jobs:
   update-db:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -18,19 +18,29 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-          
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          
-      - name: Run Fetcher
+
+      - name: Scrape GitHub GraphQL API (Top 1 → 500⭐)
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_GITHUB_TOKEN }}
         run: |
           export PYTHONPATH=$(pwd)
           python scraper/github_fetcher.py
-          
+
+      - name: Import from EvanLi/Github-Ranking (Top 100 por lenguaje)
+        run: |
+          export PYTHONPATH=$(pwd)
+          python scripts/import_from_evanli.py
+
+      - name: Scrape gitstar-ranking.com (Top ~5,000 repos)
+        run: |
+          export PYTHONPATH=$(pwd)
+          python scripts/scrape_gitstar_ranking.py
+
       - name: Commit and Push Changes
         run: |
           git config --local user.email "action@github.com"
