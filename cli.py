@@ -9,8 +9,11 @@ Uso:
     python cli.py import evanli
     python cli.py import gitstar [--pages N] [--start N]
     python cli.py api [--host H] [--port P]
+    python cli.py ready                            # Checklist de proyecto
+    python cli.py swap <feature>                   # Busca alternativa a lo que codeas
 """
 
+import re
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -26,6 +29,15 @@ import_group = typer.Typer(help="Import data from external sources")
 app.add_typer(import_group, name="import")
 
 console = Console()
+
+# Sanitizador para Windows cp1252 — limpia emojis y no-ASCII
+def clean(text, max_len=80):
+    """Limpia texto para terminal Windows (cp1252)."""
+    if not text:
+        return ""
+    # Remueve todo lo que no sea ASCII imprimible (+ acentos comunes)
+    cleaned = re.sub(r'[^\x20-\x7EÀ-ÿĀ-ſ]', '', text)
+    return cleaned[:max_len] + "..." if len(text) > max_len else cleaned
 
 
 @app.command()
@@ -69,7 +81,7 @@ def search(
     table.add_column("Descripcion", no_wrap=False)
 
     for r in results:
-        desc = (r["description"][:80] + "...") if r["description"] and len(r["description"]) > 80 else (r["description"] or "")
+        desc = clean(r.get("description"), 80)
         table.add_row(
             r["name"], r["owner"], f'{r["stars"]:,}',
             r["language"] or "-", desc
@@ -161,6 +173,167 @@ def api(
     console.print(f"[bold blue]Lanzando API en http://{host}:{port}[/bold blue]")
     console.print("[dim]Documentacion: http://localhost:" + str(port) + "/docs[/dim]")
     uvicorn.run("api.main:app", host=host, port=port, reload=True)
+
+
+@app.command()
+def ready(
+    path: str = typer.Option(".", "--path", help="Ruta del proyecto a analizar"),
+):
+    """Escanea un proyecto y genera checklist de lo que le falta."""
+    import os
+    from pathlib import Path
+
+    target = Path(path).resolve()
+    console.print(f"[bold]Analizando proyecto:[/bold] {target}")
+    console.print()
+
+    # Detectar stack
+    has_python = (target / "requirements.txt").exists() or (target / "pyproject.toml").exists() or (target / "Pipfile").exists()
+    has_js = (target / "package.json").exists()
+    has_rust = (target / "Cargo.toml").exists()
+    has_go = (target / "go.mod").exists()
+    has_docker = (target / "Dockerfile").exists() or (target / "docker-compose.yml").exists()
+    has_ci = (target / ".github" / "workflows").exists()
+    has_tests = any((target / d).exists() for d in ["tests", "test", "__tests__", "spec"])
+    has_readme = (target / "README.md").exists()
+    has_git = (target / ".git").exists()
+    has_env = (target / ".env").exists() or (target / ".env.example").exists()
+    has_gitignore = (target / ".gitignore").exists()
+
+    # Detectar frameworks
+    framework = ""
+    if has_js and (target / "package.json").exists():
+        import json
+        try:
+            pkg = json.loads((target / "package.json").read_text())
+            deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
+            if "next" in deps: framework = "Next.js"
+            elif "react" in deps: framework = "React"
+            elif "vue" in deps: framework = "Vue"
+            elif "svelte" in deps: framework = "Svelte"
+            elif "express" in deps: framework = "Express"
+            has_tests = has_tests or "jest" in deps or "vitest" in deps or "cypress" in deps
+            has_ci = has_ci or "husky" in deps or "lint-staged" in deps
+        except: pass
+    elif has_python and (target / "requirements.txt").exists():
+        content = (target / "requirements.txt").read_text().lower()
+        if "fastapi" in content: framework = "FastAPI"
+        elif "django" in content: framework = "Django"
+        elif "flask" in content: framework = "Flask"
+        has_tests = has_tests or "pytest" in content
+
+    # Determinar stack
+    stacks = []
+    if has_python: stacks.append("Python")
+    if has_js: stacks.append("JavaScript/TypeScript")
+    if has_rust: stacks.append("Rust")
+    if has_go: stacks.append("Go")
+    stack_str = " + ".join(stacks) if stacks else "No detectado"
+
+    console.print(Panel(f"[bold]Stack:[/bold] {stack_str}\n"
+                        f"[bold]Framework:[/bold] {framework or 'No detectado'}\n"
+                        f"[bold]Ruta:[/bold] {target}",
+                        title="Proyecto Detectado", border_style="blue"))
+
+    # Checklist
+    checks = [
+        ("🔬 Testing", has_tests, "testing", "pytest jest vitest playwright"),
+        ("🚀 CI/CD", has_ci, "devops", "ci/cd actions deployment"),
+        ("🐳 Docker", has_docker, "devops", "docker container dockerfile"),
+        ("📝 README", has_readme, "docs", "documentation readme"),
+        ("🔐 .env / Secrets", has_env, "security", "dotenv environment secrets"),
+        ("📋 .gitignore", has_gitignore, "git", "gitignore template"),
+        ("🔧 Git", has_git, "git", "git version-control"),
+    ]
+
+    table = Table(title="Checklist del Proyecto")
+    table.add_column("Estado", justify="center")
+    table.add_column("Categoria", style="bold")
+    table.add_column("Recomendacion")
+
+    missing_categories = []
+
+    for label, ok, cat, keywords in checks:
+        if ok:
+            table.add_row("✅", label, "[dim]Listo[/dim]")
+        else:
+            table.add_row("❌", label, f"[yellow]Buscar:[/yellow] {keywords}")
+            missing_categories.append((label, cat, keywords))
+
+    console.print(table)
+
+    # Si falta algo, buscar en BD
+    if missing_categories:
+        console.print("\n[bold yellow]Buscando recomendaciones en la BD...[/bold yellow]\n")
+        for label, cat, keywords in missing_categories[:3]:  # Max 3 busquedas
+            kw_list = keywords.split()[:3]
+            kw_str = " ".join(kw_list)
+            from scraper.db_manager import search_repos_multi_keywords
+            results = search_repos_multi_keywords(kw_list, limit=3)
+            if results:
+                rec_table = Table(title=f"Recomendaciones para {label}")
+                rec_table.add_column("Repo")
+                rec_table.add_column("Estrellas", justify="right")
+                rec_table.add_column("Descripcion")
+                for r in results:
+                    desc = clean(r.get("description"), 60)
+                    rec_table.add_row(r["name"], f'{r["stars"]:,}', desc)
+                console.print(rec_table)
+            else:
+                console.print(f"[dim]{label}: No se encontraron recomendaciones en la BD[/dim]")
+
+    console.print("\n[bold green]✅ Ready check completado[/bold green]")
+    console.print("[dim]TIP: Corre 'python cli.py search <keyword>' para explorar mas[/dim]")
+
+
+@app.command()
+def swap(
+    feature: str = typer.Argument(..., help="Que estas codeando? Ej: 'pdf parser', 'auth jwt', 'http client'"),
+):
+    """Busca si ya existe una libreria para lo que estas codeando."""
+    from scraper.db_manager import search_repos_multi_keywords
+
+    keywords = feature.strip().split()
+    console.print(f"[bold]Buscando alternativas para:[/bold] {feature}\n")
+
+    results = search_repos_multi_keywords(keywords, limit=10)
+
+    if not results:
+        console.print("[yellow]No se encontraron librerias existentes para esto.[/yellow]")
+        console.print("[dim]Puede que: 1) Sea algo muy especifico, 2) No este en la BD aun[/dim]")
+        console.print("[dim]Sugerencia: prueba con keywords mas genericas[/dim]")
+        raise typer.Exit()
+
+    table = Table(title=f"Alternativas para: {feature}")
+    table.add_column("Libreria", style="cyan")
+    table.add_column("Estrellas", justify="right", style="bold yellow")
+    table.add_column("Lenguaje")
+    table.add_column("Descripcion")
+
+    for r in results[:8]:
+        desc = clean(r.get("description"), 70)
+        table.add_row(
+            f"{r['owner']}/{r['name']}",
+            f'{r["stars"]:,}',
+            r["language"] or "-",
+            desc
+        )
+
+    console.print(table)
+
+    top = results[0]
+    console.print(f"\n[bold green]Mejor opcion:[/bold green] {top['owner']}/{top['name']} ({top['stars']:,}⭐)")
+    console.print(f"[dim]{top['url']}[/dim]")
+    if top.get("description"):
+        console.print(f"[dim]{clean(top['description'], 100)}[/dim]")
+    console.print("\n[bold]Tip de instalacion:[/bold]")
+    if top["language"] == "Python":
+        console.print(f"  pip install {top['name']}")
+    elif top["language"] in ("JavaScript", "TypeScript"):
+        console.print(f"  npm install {top['name']}  # o yarn / pnpm")
+    else:
+        console.print(f"  Visita: {top['url']}")
+    console.print(f"\n[dim]Mas resultados con: python cli.py search {' '.join(keywords)} --limit 20[/dim]")
 
 
 if __name__ == "__main__":
