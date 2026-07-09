@@ -1,53 +1,93 @@
 import aiosqlite
 from async_lru import alru_cache
-import typesense
-import os
 import logging
 
-TYPESENSE_API_KEY = os.getenv("TYPESENSE_API_KEY", "wheelsaver_typesense_key")
-TYPESENSE_HOST = os.getenv("TYPESENSE_HOST", "localhost")
-
-ts_client = typesense.Client({
-  'nodes': [{
-    'host': TYPESENSE_HOST,
-    'port': '8108',
-    'protocol': 'http'
-  }],
-  'api_key': TYPESENSE_API_KEY,
-  'connection_timeout_seconds': 2
-})
-
-
 async def search_repos_async(db: aiosqlite.Connection, keyword: str, limit: int = 5):
-    """Búsqueda vectorial/full-text mediante Typesense."""
+    """Busqueda vectorial/full-text en SQLite (FTS5 + fallback LIKE)."""
     try:
-        search_parameters = {
-            'q': keyword,
-            'query_by': 'name,description,topics,owner',
-            'per_page': limit
-        }
-        res = ts_client.collections['repos'].documents.search(search_parameters)
-        return [hit['document'] for hit in res['hits']]
-    except Exception as e:
-        logging.error(f"Error Typesense: {e}")
-        return []
+        cursor = await db.execute(
+            """
+            SELECT r.name, r.owner, r.description, r.url, r.stars, r.language, r.topics
+            FROM repos_fts f
+            JOIN repos r ON r.rowid = f.rowid
+            WHERE repos_fts MATCH ?
+            ORDER BY rank
+            LIMIT ?
+            """,
+            (keyword, limit),
+        )
+        results = await cursor.fetchall()
 
+        if not results:
+            cursor = await db.execute(
+                """
+                SELECT name, owner, description, url, stars, language, topics
+                FROM repos
+                WHERE name LIKE ? OR description LIKE ?
+                ORDER BY stars DESC
+                LIMIT ?
+                """,
+                (f"%{keyword}%", f"%{keyword}%", limit),
+            )
+            results = await cursor.fetchall()
+
+        return [dict(r) for r in results]
+    except Exception as e:
+        logging.error(f"Error búsqueda asíncrona: {e}")
+        return []
 
 async def search_repos_multi_keywords_async(
     db: aiosqlite.Connection, keywords: list[str], limit: int = 5
 ):
-    """Búsqueda con múltiples keywords en Typesense."""
-    q = " ".join(keywords)
+    """Busqueda con multiples keywords en FTS5 (AND) con fallback individual (OR)."""
+    if not keywords:
+        return []
+
+    fts_query_and = " AND ".join(f'"{kw}"' for kw in keywords)
+
     try:
-        search_parameters = {
-            'q': q,
-            'query_by': 'name,description,topics',
-            'per_page': limit
-        }
-        res = ts_client.collections['repos'].documents.search(search_parameters)
-        return [hit['document'] for hit in res['hits']]
+        cursor = await db.execute(
+            """
+            SELECT r.name, r.owner, r.description, r.url, r.stars, r.language, r.topics
+            FROM repos_fts f
+            JOIN repos r ON r.rowid = f.rowid
+            WHERE repos_fts MATCH ?
+            ORDER BY rank
+            LIMIT ?
+            """,
+            (fts_query_and, limit),
+        )
+        results = await cursor.fetchall()
+
+        if len(results) < limit:
+            results_list = [dict(r) for r in results]
+            seen = {r["name"] for r in results_list}
+
+            fts_query_or = " OR ".join(f'"{kw}"' for kw in keywords)
+            cursor = await db.execute(
+                """
+                SELECT r.name, r.owner, r.description, r.url, r.stars, r.language, r.topics
+                FROM repos_fts f
+                JOIN repos r ON r.rowid = f.rowid
+                WHERE repos_fts MATCH ?
+                ORDER BY rank
+                LIMIT ?
+                """,
+                (fts_query_or, limit * 2),
+            )
+            fallback_results = await cursor.fetchall()
+
+            for r in fallback_results:
+                r_dict = dict(r)
+                if r_dict["name"] not in seen:
+                    seen.add(r_dict["name"])
+                    results_list.append(r_dict)
+                    if len(results_list) >= limit:
+                        break
+            return results_list
+        return [dict(r) for r in results]
     except Exception as e:
-        logging.error(f"Error Typesense: {e}")
+        logging.error(f"Error búsqueda asíncrona multi-keyword: {e}")
         return []
 
 

@@ -10,10 +10,6 @@ loguru
 aiosqlite
 # Infrastructure / Architecture
 async-lru
-gunicorn
-celery
-redis
-typesense
 
 # Development (pip install -e ".[dev]")
 pytest

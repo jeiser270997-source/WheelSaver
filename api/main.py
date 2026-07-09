@@ -138,12 +138,13 @@ async def top(
 
 @app.post("/scrape")
 async def trigger_scrape(
+    background_tasks: BackgroundTasks,
     min_stars: int = Query(500, ge=10, description="Estrellas minimas para buscar"),
 ):
-    """Lanza el scraper de GitHub de forma distribuida en el worker de Celery."""
-    from worker import scrape_task
-    task = scrape_task.delay(min_stars)
-    return {"status": "ok", "task_id": task.id, "message": f"Scraper Celery iniciado (min_stars={min_stars})"}
+    """Lanza el scraper de GitHub de forma asíncrona en el mismo proceso."""
+    from scraper.github_fetcher import fetch_top_repos
+    background_tasks.add_task(fetch_top_repos, min_stars)
+    return {"status": "ok", "message": f"Scraper iniciado (min_stars={min_stars})"}
 
 app.mount("/web", StaticFiles(directory="frontend", html=True), name="frontend")
 
