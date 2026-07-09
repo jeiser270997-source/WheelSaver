@@ -8,6 +8,8 @@ uvicorn[standard]
 python-dotenv
 loguru
 aiosqlite
+openai
+
 # Infrastructure / Architecture
 async-lru
 

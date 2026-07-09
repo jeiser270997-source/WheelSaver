@@ -409,6 +409,45 @@ def skillify(
         )
     )
 
+import asyncio
+
+@app.command()
+def ask(
+    question: str = typer.Argument(
+        ..., help="Tu pregunta para la IA. Ej: 'Cual es el mejor framework de python para graficos?'"
+    ),
+):
+    """Consulta a DeepSeek V4 usando la base de datos local como contexto (RAG)."""
+    console.print(f"[bold blue]Razonando con DeepSeek V4 sobre:[/bold blue] {question}")
+    
+    import httpx
+    
+    # Podriamos consultar la base de datos y correr LLM directo, pero
+    # para no recrear la logica de asincronía y base de datos de main.py,
+    # simplemente llamamos a nuestro propio endpoint interno o ejecutamos
+    # la logica manualmente. Usaremos FTS5 directo.
+    from scraper.db_manager import search_repos_multi_keywords
+    keywords = [kw.strip() for kw in question.replace("?", "").replace("¿", "").split() if len(kw) > 3]
+    repos = search_repos_multi_keywords(keywords, limit=10)
+    
+    if repos:
+        console.print(f"[dim]Contexto encontrado: {len(repos)} repositorios.[/dim]")
+    else:
+        console.print("[dim]Contexto encontrado: 0 repositorios.[/dim]")
+        
+    from api.llm import ask_deepseek_about_repos
+    
+    with console.status("[bold green]Generando respuesta de DeepSeek...[/bold green]"):
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+        answer = loop.run_until_complete(ask_deepseek_about_repos(question, repos))
+        
+    console.print(Panel(answer, title="[bold magenta]DeepSeek V4[/bold magenta]", border_style="cyan"))
+
 
 
 

@@ -146,6 +146,31 @@ async def trigger_scrape(
     background_tasks.add_task(fetch_top_repos, min_stars)
     return {"status": "ok", "message": f"Scraper iniciado (min_stars={min_stars})"}
 
+
+from pydantic import BaseModel
+class AskRequest(BaseModel):
+    question: str
+
+@app.post("/ask")
+async def ask_agent(
+    req: AskRequest,
+    db: aiosqlite.Connection = Depends(get_db)
+):
+    """Realiza una consulta a DeepSeek V4 (RAG) usando repositorios como contexto."""
+    from api.llm import ask_deepseek_about_repos
+    
+    # Extraer posibles keywords de la pregunta para buscar contexto
+    # Simplificado: enviamos toda la pregunta a FTS5
+    keywords = [kw.strip() for kw in req.question.replace("?", "").replace("¿", "").split() if len(kw) > 3]
+    
+    if len(keywords) == 1:
+        repos = await search_repos_async(db, keywords[0], limit=10)
+    else:
+        repos = await search_repos_multi_keywords_async(db, keywords, limit=10)
+        
+    answer = await ask_deepseek_about_repos(req.question, repos)
+    return {"question": req.question, "context_repos_used": len(repos), "answer": answer}
+
 app.mount("/web", StaticFiles(directory="frontend", html=True), name="frontend")
 
 
