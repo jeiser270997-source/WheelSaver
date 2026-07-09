@@ -28,7 +28,7 @@ from api.repository import (
 
 app = FastAPI(
     title="WheelSaver API",
-    description="Busca y analiza repositorios de GitHub desde la base de datos local de WheelSaver",
+    description="Busca y analiza repositorios de GitHub desde la base de datos local de WheelSaver. RAG multi-proveedor con failover automático.",
     version="3.3.0",
 )
 
@@ -156,19 +156,18 @@ async def ask_agent(
     req: AskRequest,
     db: aiosqlite.Connection = Depends(get_db)
 ):
-    """Realiza una consulta a DeepSeek V4 (RAG) usando repositorios como contexto."""
-    from api.llm import ask_deepseek_about_repos
-    
+    """Realiza una consulta al LLM multi-proveedor (RAG) usando repositorios como contexto. Failover automático entre free tiers."""
+    from api.llm import ask_llm_about_repos
+
     # Extraer posibles keywords de la pregunta para buscar contexto
-    # Simplificado: enviamos toda la pregunta a FTS5
     keywords = [kw.strip() for kw in req.question.replace("?", "").replace("¿", "").split() if len(kw) > 3]
-    
+
     if len(keywords) == 1:
         repos = await search_repos_async(db, keywords[0], limit=10)
     else:
         repos = await search_repos_multi_keywords_async(db, keywords, limit=10)
-        
-    answer = await ask_deepseek_about_repos(req.question, repos)
+
+    answer = await ask_llm_about_repos(req.question, repos)
     return {"question": req.question, "context_repos_used": len(repos), "answer": answer}
 
 app.mount("/web", StaticFiles(directory="frontend", html=True), name="frontend")

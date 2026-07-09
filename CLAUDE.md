@@ -25,7 +25,7 @@ para busquedas ultrarrápidas.
 - `python -m pytest tests/ -v`
 
 ## Arquitectura
-- `scraper/github_fetcher.py`: Logica de paginacion GraphQL (httpx), filtros de calidad y rate-limiting.
+- `api/llm.py`: Sistema multi-LLM con failover automático entre proveedores free tier (Groq, Cerebras, OpenRouter, NVIDIA, SambaNova, Mistral, HuggingFace, Google Gemini, Cohere). Usa `AsyncOpenAI` para APIs compatibles y `httpx` para las nativas.
 - `scraper/db_manager.py`: ORM ligero, upserts, FTS5, `make_repo_id()` para fuentes externas.
 - `cli.py`: Punto de entrada unificado con Typer + Rich (tablas, paneles, colores).
 - `api/main.py`: API REST con FastAPI (endpoints: /search, /stats, /repos, /languages, /top, /health).
