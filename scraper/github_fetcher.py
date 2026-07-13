@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sqlite3
 import httpx
 import time
@@ -96,7 +96,7 @@ def fetch_top_repos(min_stars=500):
 
     query = """
     query($queryString: String!, $cursor: String) {
-      search(query: $queryString, type: REPOSITORY, first: 100, after: $cursor) {
+      search(query: $queryString, type: REPOSITORY, first: 40, after: $cursor) {
         pageInfo { endCursor hasNextPage }
         edges {
           node {
@@ -263,3 +263,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     fetch_top_repos(min_stars=args.min_stars)
+
