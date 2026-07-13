@@ -1,4 +1,4 @@
-name: Update Top Repos Database
+﻿name: Update Top Repos Database
 
 on:
   schedule:
@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          lfs: true
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -47,3 +49,4 @@ jobs:
           git config --local user.name "GitHub Action"
           git add data/top_repos.db
           git diff --quiet && git diff --staged --quiet || (git commit -m "chore(db): update top repos database" && git push)
+
