@@ -1,9 +1,11 @@
 import sqlite3
 import os
 import hashlib
+import shutil
+import httpx
 from loguru import logger
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "top_repos.db")
+DB_PATH = os.path.join(os.path.expanduser("~"), ".wheelsaver", "top_repos.db")
 
 
 def make_repo_id(owner, name):
@@ -17,6 +19,13 @@ def make_repo_id(owner, name):
 
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+
+    if not os.path.exists(DB_PATH):
+        seed_db = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "top_repos.db")
+        if os.path.exists(seed_db):
+            shutil.copy2(seed_db, DB_PATH)
+            logger.info("Copied seed DB from {} to {}", seed_db, DB_PATH)
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("PRAGMA journal_mode=WAL;")
@@ -90,42 +99,48 @@ def rebuild_fts():
         conn.close()
 
 
-def upsert_repos(repos_list):
+def upsert_repos(repos_list, conn=None):
     """
     Inserts or updates a list of repositories in the database.
-    repos_list is a list of dictionaries.
+    Uses executemany for bulk insert performance.
     """
-    conn = init_db()
+    owns_conn = False
+    if conn is None:
+        conn = init_db()
+        owns_conn = True
     cursor = conn.cursor()
 
+    data = []
     for repo in repos_list:
         topics_str = ",".join(repo.get("topics", []))
-        cursor.execute(
-            """
-            INSERT INTO repos (id, name, owner, description, url, stars, language, topics, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                name=excluded.name,
-                owner=excluded.owner,
-                description=excluded.description,
-                url=excluded.url,
-                stars=excluded.stars,
-                language=excluded.language,
-                topics=excluded.topics,
-                updated_at=excluded.updated_at
+        data.append((
+            repo["id"],
+            repo["name"],
+            repo["owner"],
+            repo.get("description", ""),
+            repo["url"],
+            repo["stars"],
+            repo.get("language", ""),
+            topics_str,
+            repo.get("updated_at", ""),
+        ))
+
+    cursor.executemany(
+        """
+        INSERT INTO repos (id, name, owner, description, url, stars, language, topics, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            name=excluded.name,
+            owner=excluded.owner,
+            description=excluded.description,
+            url=excluded.url,
+            stars=excluded.stars,
+            language=excluded.language,
+            topics=excluded.topics,
+            updated_at=excluded.updated_at
         """,
-            (
-                repo["id"],
-                repo["name"],
-                repo["owner"],
-                repo.get("description", ""),
-                repo["url"],
-                repo["stars"],
-                repo.get("language", ""),
-                topics_str,
-                repo.get("updated_at", ""),
-            ),
-        )
+        data,
+    )
 
     conn.commit()
 
@@ -136,10 +151,11 @@ def upsert_repos(repos_list):
     except Exception:
         pass
 
-    conn.close()
+    if owns_conn:
+        conn.close()
 
 
-def upsert_external_repos(repos_list):
+def upsert_external_repos(repos_list, conn=None):
     """
     Como upsert_repos pero genera automaticamente un ID sintetico
     a partir de (owner, name) para fuentes externas que no tienen
@@ -148,15 +164,18 @@ def upsert_external_repos(repos_list):
     for repo in repos_list:
         if "id" not in repo or not repo["id"]:
             repo["id"] = make_repo_id(repo["owner"], repo["name"])
-    upsert_repos(repos_list)
+    upsert_repos(repos_list, conn=conn)
 
 
-def search_repos(keyword, limit=5):
+def search_repos(keyword, limit=5, conn=None):
     """
     Busca repos usando FTS5 (full-text search).
     Si FTS5 falla (poco probable), hace fallback a LIKE.
     """
-    conn = init_db()
+    owns_conn = False
+    if conn is None:
+        conn = init_db()
+        owns_conn = True
     cursor = conn.cursor()
 
     try:
@@ -186,7 +205,8 @@ def search_repos(keyword, limit=5):
         )
 
     results = cursor.fetchall()
-    conn.close()
+    if owns_conn:
+        conn.close()
 
     repos = []
     for r in results:
@@ -204,12 +224,15 @@ def search_repos(keyword, limit=5):
     return repos
 
 
-def search_repos_multi_keywords(keywords, limit=20):
+def search_repos_multi_keywords(keywords, limit=20, conn=None):
     """
     Busca repos que matcheen CUALQUIERA de las keywords dadas.
     Usa FTS5 con OR, fallback a LIKE.
     """
-    conn = init_db()
+    owns_conn = False
+    if conn is None:
+        conn = init_db()
+        owns_conn = True
     cursor = conn.cursor()
 
     try:
@@ -243,7 +266,8 @@ def search_repos_multi_keywords(keywords, limit=20):
                         break
 
     results = cursor.fetchall() if "results" not in dir() else results
-    conn.close()
+    if owns_conn:
+        conn.close()
 
     repos = []
     for r in results:
@@ -258,12 +282,88 @@ def search_repos_multi_keywords(keywords, limit=20):
                 "topics": r[6],
             }
         )
+
+    # Live fallback: si no hay resultados locales y estamos en modo autogestionado, buscar en GitHub API
+    if not repos and owns_conn:
+        repo_dicts = _fetch_live_github(" ".join(keywords), limit)
+        if repo_dicts:
+            logger.info("+{} repos encontrados via GitHub API y guardados en BD local", len(repo_dicts))
+            repos = repo_dicts[:limit]
+
     return repos
 
 
-def get_stats():
+def _fetch_live_github(query: str, limit: int = 20) -> list[dict]:
+    """
+    Consulta la API REST de GitHub (/search/repositories) cuando la BD local
+    no tiene resultados. Usa GITHUB_TOKEN del entorno si existe.
+    Los resultados se persisten en la BD local para futuras consultas.
+    """
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    params = {
+        "q": query,
+        "sort": "stars",
+        "order": "desc",
+        "per_page": min(limit, 100),
+    }
+
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.get(
+                "https://api.github.com/search/repositories",
+                headers=headers,
+                params=params,
+            )
+
+        if resp.status_code == 403:
+            logger.warning("GitHub API rate limit alcanzado (live fallback)")
+            return []
+        if resp.status_code != 200:
+            logger.warning("GitHub API respondio {} en live fallback", resp.status_code)
+            return []
+
+        items = resp.json().get("items", [])
+        logger.info("GitHub API live: {} resultados para '{}'", len(items), query)
+
+        live_repos = []
+        for item in items:
+            repo = {
+                "id": str(item["id"]),
+                "name": item["name"],
+                "owner": item["owner"]["login"],
+                "description": item.get("description") or "",
+                "url": item["html_url"],
+                "stars": item["stargazers_count"],
+                "language": item.get("language") or "",
+                "topics": ",".join(item.get("topics", [])),
+                "updated_at": item.get("updated_at", ""),
+            }
+            live_repos.append(repo)
+
+        # Persistir en BD local para futuras consultas
+        if live_repos:
+            upsert_repos(live_repos)
+
+        return live_repos
+
+    except httpx.TimeoutException:
+        logger.warning("Timeout en live fallback a GitHub API")
+        return []
+    except Exception as e:
+        logger.error("Error en live fallback a GitHub API: {}", e)
+        return []
+
+
+def get_stats(conn=None):
     """Devuelve estadísticas de la base de datos."""
-    conn = init_db()
+    owns_conn = False
+    if conn is None:
+        conn = init_db()
+        owns_conn = True
     cursor = conn.cursor()
     stats = {}
     cursor.execute("SELECT COUNT(*) FROM repos")
@@ -284,14 +384,19 @@ def get_stats():
     """)
     stats["top_languages"] = {r[0]: r[1] for r in cursor.fetchall()}
 
-    conn.close()
+    if owns_conn:
+        conn.close()
     return stats
 
 
-def get_all_repos():
-    conn = init_db()
+def get_all_repos(conn=None):
+    owns_conn = False
+    if conn is None:
+        conn = init_db()
+        owns_conn = True
     cursor = conn.cursor()
     cursor.execute("SELECT name, description, topics, url, stars FROM repos ORDER BY stars DESC")
     results = cursor.fetchall()
-    conn.close()
+    if owns_conn:
+        conn.close()
     return results

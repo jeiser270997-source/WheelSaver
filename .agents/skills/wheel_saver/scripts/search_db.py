@@ -5,13 +5,7 @@ import json
 
 
 def search_db(keywords):
-    # .agents/skills/wheel_saver/scripts/search_db.py -> subir 5 niveles para llegar a la raiz del proyecto
-    root_dir = os.path.dirname(
-        os.path.dirname(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        )
-    )
-    db_path = os.path.join(root_dir, "data", "top_repos.db")
+    db_path = os.path.join(os.path.expanduser("~"), ".wheelsaver", "top_repos.db")
 
     if not os.path.exists(db_path):
         print(json.dumps({"error": f"Base de datos no encontrada en {db_path}"}))

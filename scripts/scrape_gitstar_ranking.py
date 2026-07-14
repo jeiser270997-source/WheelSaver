@@ -14,10 +14,10 @@ Uso:
 
 import sys
 import os
-import re
 import time
 
 import httpx
+from bs4 import BeautifulSoup
 from tqdm import tqdm
 from loguru import logger
 
@@ -31,50 +31,45 @@ REQUEST_DELAY = 1.5
 
 
 def parse_repos_from_html(html):
-    """Extrae repos del HTML de una pagina de gitstar-ranking."""
+    """Extrae repos del HTML usando BeautifulSoup."""
     repos = []
     seen = set()
+    soup = BeautifulSoup(html, "html.parser")
 
-    pattern = re.compile(
-        r'<a\s+class="list-group-item\s*paginated_item"[^>]*href="/([^"/]+/[^"/]+)"[^>]*>'
-        r"(.*?)"
-        r"</a>",
-        re.DOTALL,
-    )
-
-    for m in pattern.finditer(html):
-        href_owner_repo = m.group(1)
-        inner = m.group(2)
-
-        if "/" not in href_owner_repo:
+    for a_tag in soup.find_all("a", class_="list-group-item paginated_item"):
+        href = a_tag.get("href", "")
+        if "/" not in href:
             continue
-        owner, name = href_owner_repo.split("/", 1)
+        owner, name = href.strip("/").split("/", 1)
 
         key = f"{owner.lower()}/{name.lower()}"
         if key in seen:
             continue
         seen.add(key)
 
-        stars_match = re.search(
-            r"stargazers_count[^>]*>\s*(?:<i[^>]*></i>\s*)?([\d,]+)\s*<",
-            inner,
-        )
-        stars = int(stars_match.group(1).replace(",", "")) if stars_match else 0
+        # Estrellas
+        stars_el = a_tag.find(class_="stargazers_count")
+        stars = 0
+        if stars_el:
+            stars_text = stars_el.get_text(strip=True).replace(",", "")
+            try:
+                stars = int(stars_text)
+            except ValueError:
+                pass
 
-        desc_match = re.search(
-            r'repo-description["\'][^>]*title\s*=\s*["\']([^"\']*)["\']',
-            inner,
-        )
-        description = desc_match.group(1).strip() if desc_match else ""
+        # Descripcion
+        desc_el = a_tag.find(class_="repo-description")
+        description = desc_el.get("title", "").strip() if desc_el else ""
 
-        lang_match = re.search(
-            r"repo-language[^>]*>.*?label[^>]*>\s*([^<]+?)\s*<", inner, re.DOTALL
-        )
+        # Lenguaje
+        lang_el = a_tag.find(class_="repo-language")
         language = ""
-        if lang_match:
-            lang_text = lang_match.group(1).strip()
-            if lang_text != "No language available":
-                language = lang_text
+        if lang_el:
+            label = lang_el.find(class_="label")
+            if label:
+                lang_text = label.get_text(strip=True)
+                if lang_text and lang_text != "No language available":
+                    language = lang_text
 
         repos.append(
             {

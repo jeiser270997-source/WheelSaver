@@ -2,5 +2,8 @@
 __pycache__/
 *.pyc
 venv/
-.agents/
+# Skills de IA de WheelSaver — se versionan explícitamente
+.agents/*
+!.agents/skills/
+!.agents/skills/**
 .coverage

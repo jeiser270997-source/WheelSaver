@@ -33,16 +33,16 @@ pip install -r requirements.txt
 echo "GITHUB_TOKEN=ghp_tu_token_aqui" > .env
 
 # 3a. Usar el CLI directamente
-python cli.py stats                          # Estadisticas de la BD
-python cli.py search fastapi pytest          # Buscar repos por keyword
-python cli.py swap "pdf parser"              # Buscar alternativas
-python cli.py ready                          # Checklist del proyecto
+wheelsaver stats                          # Estadisticas de la BD
+wheelsaver search fastapi pytest          # Buscar repos por keyword
+wheelsaver swap "pdf parser"              # Buscar alternativas
+wheelsaver ready                          # Checklist del proyecto
 
 # 3b. Lanzar API REST
-python cli.py api                            # → http://localhost:8000/docs
+wheelsaver api                            # → http://localhost:8000/docs
 
 # 3c. Lanzar Dashboard
-python cli.py dashboard                      # → http://localhost:8501
+wheelsaver dashboard                      # → http://localhost:8501
 
 # 3d. Modo Docker
 docker compose up --build -d                 # → http://localhost:8000
@@ -90,17 +90,17 @@ WheelSaver/
 ## Comandos del CLI
 
 ```bash
-python cli.py search <keywords>   # Busqueda FTS5 con Rich Table
-python cli.py stats               # Estadisticas con Panels
-python cli.py scrape              # Scraper GraphQL desde Top 1
-python cli.py import evanli       # Importar EvanLi
-python cli.py import gitstar      # Importar gitstar-ranking
-python cli.py api                 # Lanzar API REST
-python cli.py docker              # Levantar en Docker
-python cli.py dashboard           # Lanzar Dashboard
-python cli.py ready               # Checklist del proyecto
-python cli.py swap <feature>      # Buscar alternativas
-python cli.py --install-completion  # Autocompletado
+wheelsaver search <keywords>   # Busqueda FTS5 con Rich Table
+wheelsaver stats               # Estadisticas con Panels
+wheelsaver scrape              # Scraper GraphQL desde Top 1
+wheelsaver import evanli       # Importar EvanLi
+wheelsaver import gitstar      # Importar gitstar-ranking
+wheelsaver api                 # Lanzar API REST
+wheelsaver docker              # Levantar en Docker
+wheelsaver dashboard           # Lanzar Dashboard
+wheelsaver ready               # Checklist del proyecto
+wheelsaver swap <feature>      # Buscar alternativas
+wheelsaver --install-completion  # Autocompletado
 ```
 
 ## Configuracion en GitHub

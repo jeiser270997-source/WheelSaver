@@ -66,7 +66,7 @@ Considera keywords de estas categorias:
 Ejecuta el CLI unificado de busqueda con las keywords extraidas:
 
 ```
-python cli.py search keyword1 keyword2 keyword3 --limit 25
+wheelsaver search keyword1 keyword2 keyword3 --limit 25
 ```
 
 El script `cli.py` resuelve automaticamente la ubicacion de la base de datos.
@@ -75,11 +75,11 @@ Devuelve resultados ordenados por estrellas con: `name`, `owner`, `description`,
 
 Si el CLI no esta disponible, usa el script legacy:
 ```
-python .agents/skills/wheel_saver/scripts/search_db.py keyword1 keyword2
+python "$(python -c "import site; print(site.getsitepackages()[0])")/../.agents/skills/wheel_saver/scripts/search_db.py" keyword1 keyword2
 ```
 
 **Importante**: Si la BD existe pero tiene menos de 100 repos, avisa al usuario
-que ejecute primero el scraper: `python cli.py scrape`
+que ejecute primero el scraper: `wheelsaver scrape`
 
 ---
 
@@ -176,7 +176,7 @@ con el siguiente formato:
 1. [ ] Identificar dependencias actuales (package.json, requirements.txt, etc.)
 2. [ ] Identificar funcionalidades implementadas manualmente
 3. [ ] Detectar dependencias deprecadas o mal mantenidas
-4. [ ] Buscar keywords en BD local (cli.py search)
+4. [ ] Buscar keywords en BD local (wheelsaver search)
 5. [ ] Evaluar cada recomendacion contra stack actual
 6. [ ] Verificar actividad reciente (12 meses)
 7. [ ] Verificar licencia compatible
@@ -201,8 +201,8 @@ curl http://localhost:8000/languages
 
 ## Notas Importantes para el Agente
 
-- La base de datos se encuentra en `data/top_repos.db` dentro del proyecto
-  WheelSaver (resuelta automaticamente por el CLI)
+- La base de datos se encuentra en `~/.wheelsaver/top_repos.db`
+  (resuelta automaticamente por el CLI)
 - Contiene repos con **+1,000 estrellas** de todos los lenguajes y categorias
 - Se auto-actualiza cada semana con GitHub Actions (3 fuentes: GraphQL API,
   EvanLi/Github-Ranking, gitstar-ranking.com)
@@ -211,5 +211,5 @@ curl http://localhost:8000/languages
   `pip install X`, `cargo add X`, etc.)
 - Se honesto si ningun repo en la BD calza perfecto — mejor decirlo que
   recomendar algo forzado
-- Para usar el CLI unificado: `python cli.py search <keywords> --limit 25`
-- Para ver estadisticas: `python cli.py stats`
+- Para usar el CLI unificado: `wheelsaver search <keywords> --limit 25`
+- Para ver estadisticas: `wheelsaver stats`

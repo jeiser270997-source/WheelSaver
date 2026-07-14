@@ -46,7 +46,7 @@ Se especifico, no generico.
 ## PASO 3 — Buscar en la BD
 
 ```
-python cli.py search <keywords> --limit 10
+wheelsaver search <keywords> --limit 10
 ```
 
 Filtra resultados:

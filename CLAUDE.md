@@ -1,19 +1,19 @@
 # Contexto de WheelSaver
 
 WheelSaver es un scraper de GitHub y una herramienta de auditoria por IA.
-Su objetivo es mantener una base de datos local (`data/top_repos.db`) con
+Su objetivo es mantener una base de datos local (`~/.wheelsaver/top_repos.db`) con
 los repositorios de GitHub de mas de 500 estrellas, usando SQLite y FTS5
 para busquedas ultrarrápidas.
 
 ## Comandos Principales
 
-### CLI Unificado (Typer + Rich)
-- Buscar repos:  `python cli.py search <keywords> [--limit N] [--language L] [--min-stars N]`
-- Estadisticas:  `python cli.py stats`
-- Scraper:       `python cli.py scrape [--min-stars 500]`
-- Import EvanLi: `python cli.py import evanli`
-- Import Gitstar: `python cli.py import gitstar [--pages N]`
-- API REST:      `python cli.py api [--port 8000]`
+### CLI Global (instalado via `pip install -e .`)
+- Buscar repos:  `wheelsaver search <keywords> [--limit N] [--language L] [--min-stars N]`
+- Estadisticas:  `wheelsaver stats`
+- Scraper:       `wheelsaver scrape [--min-stars 500]`
+- Import EvanLi: `wheelsaver import evanli`
+- Import Gitstar: `wheelsaver import gitstar [--pages N]`
+- API REST:      `wheelsaver api [--port 8000]`
 
 ### Scripts Legacy (siguen funcionando)
 - `python scraper/github_fetcher.py --min-stars 500`
@@ -32,7 +32,7 @@ para busquedas ultrarrápidas.
 - `scripts/import_from_evanli.py`: Importa Top 100 por lenguaje (httpx + tqdm).
 - `scripts/scrape_gitstar_ranking.py`: Scrapea gitstar-ranking.com (httpx + tqdm).
 - `.agents/skills/wheel_saver/`: Skill de IA para que Claude audite proyectos.
-- `data/top_repos.db`: Base de datos SQLite (~23k repos, indice FTS5).
+- `~/.wheelsaver/top_repos.db`: Base de datos SQLite (~23k repos, indice FTS5).
 - `tests/`: Tests con pytest + BD in-memory (18 tests).
 
 ## Reglas de Desarrollo

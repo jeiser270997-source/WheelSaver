@@ -24,6 +24,8 @@ from scraper.db_manager import upsert_external_repos, get_stats
 
 RAW_BASE = "https://raw.githubusercontent.com/EvanLi/Github-Ranking/master"
 
+_CELL_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+
 ARCHIVOS = [
     "Top100/Top-100-stars.md",
     "Top100/Top-100-forks.md",
@@ -66,42 +68,45 @@ ARCHIVOS = [
 
 def parse_md_table(text):
     """
-    Parsea la tabla Markdown de EvanLi.
-
-    Formato:
-    | # | [name](url) | stars | forks | language | issues | description | last_commit |
+    Parsea tabla Markdown linea por linea en vez de un gran regex.
+    Formato esperado: | # | [name](url) | stars | forks | language | issues | description | last_commit |
     """
     repos = []
     seen = set()
 
-    pattern = re.compile(
-        r"\|\s*\d+\s*\|"
-        r"\s*\[([^\]]+)\]\(([^)]+)\)\s*\|"  # name + url
-        r"\s*([\d,]+)\s*\|"  # stars
-        r"\s*([\d,]+)\s*\|"  # forks
-        r"\s*([^|]*?)\s*\|"  # language
-        r"\s*([\d,]+)\s*\|"  # open issues
-        r"\s*(.*?)\s*\|"  # description
-        r"\s*(.*?)\s*\|"  # last commit
-    )
-
     for line in text.split("\n"):
         line = line.strip()
-        m = pattern.match(line)
-        if not m:
+        if not line.startswith("|"):
             continue
 
+        cols = [c.strip() for c in line.split("|")]
+        if len(cols) < 9:
+            continue
+
+        cell = cols[2]
+        m = _CELL_RE.search(cell)
+        if not m:
+            logger.debug("Saltando linea sin link valido: {}", line[:60])
+            continue
         name = m.group(1).strip()
         url = m.group(2).strip()
-        stars_str = m.group(3).replace(",", "")
-        lang = m.group(5).strip()
-        desc = m.group(7).strip()
-        updated_at = m.group(8).strip()
+
+        if name.lower() == "name" or not name:
+            continue
 
         key = name.lower()
         if key in seen:
             continue
         seen.add(key)
+
+        try:
+            stars = int(cols[3].replace(",", ""))
+        except (ValueError, IndexError):
+            continue
+
+        lang = cols[5] if len(cols) > 5 else ""
+        desc = cols[7] if len(cols) > 7 else ""
+        updated_at = cols[8] if len(cols) > 8 else ""
 
         owner = ""
         try:
@@ -112,11 +117,6 @@ def parse_md_table(text):
             pass
 
         if not owner:
-            continue
-
-        try:
-            stars = int(stars_str)
-        except ValueError:
             continue
 
         repos.append(

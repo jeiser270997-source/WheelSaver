@@ -1,45 +1,51 @@
 <#
 .SYNOPSIS
-  Instala TODOS los skills de WheelSaver globalmente para usarlos desde
-  cualquier proyecto. Rueditas de entrenamiento para no cagarla.
+  Instala WheelSaver globalmente en el sistema.
 
 .DESCRIPTION
-  Copia todos los skills (wheel-saver, wheel-ready, wheel-swap) al proyecto
-  activo. Despues de ejecutar, abre Claude y usa:
-  - "Audita este proyecto con WheelSaver"
-  - "wheel-ready" (checklist de proyecto)
-  - "wheel-swap X" (busca alternativa a lo que codeas)
+  Instala el paquete wheelsaver como comando global y copia los skills
+  al proyecto activo para que Claude Code los reconozca.
+
+  Ahora WheelSaver se instala via pip en modo editable (-e .) y el
+  comando wheelsaver queda disponible globalmente en la terminal.
 
 .EXAMPLE
-  & "E:\PROYECTOS\Mis_Proyectos\TOP_REPOS\Instalar-WheelSaver.ps1"
+  .\Instalar-WheelSaver.ps1
 #>
 
-$origenBase  = "E:\PROYECTOS\Mis_Proyectos\TOP_REPOS"
-$skillsDir   = "$origenBase\.agents\skills"
+$projectRoot = $PSScriptRoot
 $destinoSkills = "$PWD\.agents\skills"
 
 Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host "    WheelSaver — Rueditas de Entrenamiento"   -ForegroundColor Cyan
+Write-Host "    WheelSaver — Instalacion Global"           -ForegroundColor Cyan
 Write-Host "=============================================" -ForegroundColor Cyan
 Write-Host ""
+Write-Host "Proyecto origen:  $projectRoot" -ForegroundColor White
 Write-Host "Proyecto destino: $PWD" -ForegroundColor White
 
-# Validar
-if (-not (Test-Path "$origenBase\data\top_repos.db")) {
-    Write-Host "Error: No se encuentra la BD en $origenBase\data\top_repos.db" -ForegroundColor Red
+# 1. Instalar paquete en modo editable
+Write-Host ""
+Write-Host "[1/3] Instalando paquete wheelsaver..." -ForegroundColor Yellow
+try {
+    & pip install -e "$projectRoot"
+    Write-Host "  OK: wheelsaver instalado globalmente" -ForegroundColor Green
+} catch {
+    Write-Host "  ERROR: No se pudo instalar el paquete" -ForegroundColor Red
     exit 1
 }
 
-# Crear directorio destino
+# 2. Copiar skills al proyecto activo
+Write-Host ""
+Write-Host "[2/3] Instalando skills para Claude Code..." -ForegroundColor Yellow
+
 if (-not (Test-Path $destinoSkills)) {
     New-Item -ItemType Directory -Force -Path $destinoSkills | Out-Null
 }
 
-# Skills a instalar
 $skills = @("wheel_saver", "wheel-ready", "wheel-swap")
 
 foreach ($skill in $skills) {
-    $origen = "$skillsDir\$skill"
+    $origen = "$projectRoot\.agents\skills\$skill"
     $destino = "$destinoSkills\$skill"
 
     if (Test-Path $origen) {
@@ -54,34 +60,43 @@ foreach ($skill in $skills) {
     }
 }
 
-# Crear alias global para CLI (opcional)
-$aliasScript = @"
-# WheelSaver CLI alias (agrega esto a tu `$PROFILE)
-function wheelsaver {
-    python E:\PROYECTOS\Mis_Proyectos\TOP_REPOS\cli.py @args
+# 3. Verificar instalacion
+Write-Host ""
+Write-Host "[3/3] Verificando instalacion..." -ForegroundColor Yellow
+try {
+    $testVersion = & wheelsaver --help 2>&1 | Out-String
+    if ($testVersion -match "WheelSaver") {
+        Write-Host "  OK: Comando 'wheelsaver' disponible" -ForegroundColor Green
+    }
+} catch {
+    Write-Host "  AVISO: No se pudo verificar el comando. Prueba 'wheelsaver --help'" -ForegroundColor Yellow
 }
-"@
+
+# Verificar BD
+$dbPath = "$env:USERPROFILE\.wheelsaver\top_repos.db"
+if (Test-Path $dbPath) {
+    $size = (Get-Item $dbPath).Length / 1MB
+    Write-Host "  OK: BD encontrada en $dbPath ($([math]::Round($size, 1)) MB)" -ForegroundColor Green
+} else {
+    Write-Host "  INFO: BD aun no creada. Corre 'wheelsaver scrape' para inicializarla" -ForegroundColor Yellow
+}
 
 Write-Host ""
 Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host "  Rueditas instaladas con exito!"              -ForegroundColor Green
+Write-Host "  WheelSaver instalado globalmente!"           -ForegroundColor Green
 Write-Host "=============================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Skills disponibles en este proyecto:" -ForegroundColor Yellow
-Write-Host "  🛞 wheel_saver  — Auditoria completa del proyecto" -ForegroundColor White
-Write-Host "  ✅ wheel-ready  — Checklist de lo que le falta" -ForegroundColor White
-Write-Host "  🔄 wheel-swap   — Busca alternativa a lo que codeas" -ForegroundColor White
+Write-Host "Skills instalados en este proyecto:" -ForegroundColor Yellow
+Write-Host "  wheelsaver       — CLI global desde cualquier carpeta" -ForegroundColor White
+Write-Host "  wheel_saver      — Auditoria completa del proyecto" -ForegroundColor White
+Write-Host "  wheel-ready      — Checklist de lo que le falta" -ForegroundColor White
+Write-Host "  wheel-swap       — Busca alternativa a lo que codeas" -ForegroundColor White
 Write-Host ""
 Write-Host "Como usarlos:" -ForegroundColor Yellow
-Write-Host "  1. Abre Claude Code:               claude" -ForegroundColor Gray
-Write-Host "  2. Auditar proyecto:               Audita este proyecto con WheelSaver" -ForegroundColor Gray
-Write-Host "  3. Checklist:                      wheel-ready" -ForegroundColor Gray
-Write-Host "  4. Buscar alternativa:             wheel-swap parser de PDF" -ForegroundColor Gray
+Write-Host "  wheelsaver search <keywords>   Buscar repos en la BD" -ForegroundColor Gray
+Write-Host "  wheelsaver stats               Estadisticas de la BD" -ForegroundColor Gray
+Write-Host "  wheelsaver scrape              Scrapear GitHub" -ForegroundColor Gray
+Write-Host "  wheelsaver swap <feature>      Buscar alternativa" -ForegroundColor Gray
+Write-Host "  wheelsaver ready               Checklist del proyecto" -ForegroundColor Gray
 Write-Host ""
-Write-Host "CLI directo (sin Claude):" -ForegroundColor Yellow
-Write-Host "  python E:\PROYECTOS\Mis_Proyectos\TOP_REPOS\cli.py search <keyword>" -ForegroundColor Gray
-Write-Host "  python E:\PROYECTOS\Mis_Proyectos\TOP_REPOS\cli.py swap 'pdf parser'" -ForegroundColor Gray
-Write-Host "  python E:\PROYECTOS\Mis_Proyectos\TOP_REPOS\cli.py stats" -ForegroundColor Gray
-Write-Host "  python E:\PROYECTOS\Mis_Proyectos\TOP_REPOS\cli.py ready" -ForegroundColor Gray
-Write-Host ""
-Write-Host "BD centralizada: $origenBase\data\top_repos.db ($((Get-Item "$origenBase\data\top_repos.db").Length / 1MB) MB)" -ForegroundColor DarkGray
+Write-Host "BD centralizada: $env:USERPROFILE\.wheelsaver\top_repos.db" -ForegroundColor DarkGray

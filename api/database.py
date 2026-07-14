@@ -1,11 +1,19 @@
 import aiosqlite
 import os
+import shutil
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "top_repos.db")
+DB_PATH = os.path.join(os.path.expanduser("~"), ".wheelsaver", "top_repos.db")
 
 
 async def get_db():
     """Dependencia de FastAPI para obtener una sesión asíncrona de BD."""
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+
+    if not os.path.exists(DB_PATH):
+        seed_db = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "top_repos.db")
+        if os.path.exists(seed_db):
+            shutil.copy2(seed_db, DB_PATH)
+
     db = await aiosqlite.connect(DB_PATH)
     await db.execute("PRAGMA journal_mode=WAL;")
     db.row_factory = aiosqlite.Row

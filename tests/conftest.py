@@ -2,13 +2,15 @@
 
 Provee una base de datos SQLite in-memory con el mismo esquema
 que la BD real, mas repos de muestra para los tests.
+
+Incluye fixtures async para tests de la API REST (FastAPI).
 """
 
 import sqlite3
 import os
 import sys
 import pytest
-import tempfile
+import aiosqlite
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -110,6 +112,66 @@ def build_test_db():
     return conn
 
 
+async def build_async_test_db_empty():
+    """Crea una BD SQLite async in-memory VACIA con esquema completo."""
+    db = await aiosqlite.connect(":memory:")
+    db.row_factory = aiosqlite.Row
+    await db.execute("PRAGMA journal_mode=WAL;")
+
+    await db.execute("""
+        CREATE TABLE repos (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            owner TEXT NOT NULL,
+            description TEXT,
+            url TEXT NOT NULL,
+            stars INTEGER NOT NULL,
+            language TEXT,
+            topics TEXT,
+            updated_at TEXT,
+            is_archived INTEGER DEFAULT 0
+        )
+    """)
+    await db.execute("CREATE INDEX idx_repos_stars ON repos(stars DESC)")
+    await db.execute("CREATE INDEX idx_repos_language ON repos(language)")
+    await db.execute("CREATE INDEX idx_repos_owner ON repos(owner)")
+    await db.execute("""
+        CREATE VIRTUAL TABLE repos_fts USING fts5(
+            name, description, topics,
+            content='repos',
+            content_rowid='rowid'
+        )
+    """)
+    await db.commit()
+    return db
+
+
+async def build_async_test_db():
+    """Crea una BD SQLite async in-memory con esquema completo + datos."""
+    db = await build_async_test_db_empty()
+    for repo in SAMPLE_REPOS:
+        topics_str = ",".join(repo["topics"])
+        await db.execute(
+            """INSERT INTO repos (id, name, owner, description, url, stars, language, topics, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                repo["id"],
+                repo["name"],
+                repo["owner"],
+                repo["description"],
+                repo["url"],
+                repo["stars"],
+                repo["language"],
+                topics_str,
+                repo["updated_at"],
+            ),
+        )
+    await db.commit()
+    await db.execute("INSERT INTO repos_fts(repos_fts) VALUES('rebuild')")
+    await db.commit()
+    return db
+
+
 @pytest.fixture
 def db_conn():
     """Fixture: conexion a BD in-memory con esquema completo."""
@@ -144,3 +206,11 @@ def db_with_data(db_conn):
     cursor.execute("INSERT INTO repos_fts(repos_fts) VALUES('rebuild')")
     db_conn.commit()
     return db_conn
+
+
+@pytest.fixture
+async def async_test_db():
+    """Fixture async: BD SQLite in-memory con esquema + datos, para tests de API."""
+    db = await build_async_test_db()
+    yield db
+    await db.close()

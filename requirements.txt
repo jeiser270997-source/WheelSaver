@@ -13,6 +13,9 @@ openai
 # Infrastructure / Architecture
 async-lru
 
+# Scraping
+beautifulsoup4
+
 # Development (pip install -e ".[dev]")
 pytest
 pytest-asyncio

@@ -26,6 +26,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install -e .
 
       - name: Configure Git LFS in Runner
         run: |
@@ -34,19 +35,16 @@ jobs:
       - name: Run GitHub GraphQL Scraper
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_GITHUB_TOKEN }}
-        run: |
-          export PYTHONPATH=E:\PROYECTOS\Mis_Proyectos\WHEELSAVER
-          python cli.py scrape --min-stars 500
+        run: wheelsaver scrape --min-stars 500
 
       - name: Import from EvanLi/Github-Ranking
-        run: |
-          export PYTHONPATH=E:\PROYECTOS\Mis_Proyectos\WHEELSAVER
-          python cli.py import evanli
+        run: wheelsaver import evanli
 
       - name: Scrape gitstar-ranking.com
-        run: |
-          export PYTHONPATH=E:\PROYECTOS\Mis_Proyectos\WHEELSAVER
-          python cli.py import gitstar
+        run: wheelsaver import gitstar
+
+      - name: Copy updated DB to workspace
+        run: cp ~/.wheelsaver/top_repos.db data/top_repos.db
 
       - name: Commit and Push Changes (LFS Compatible)
         run: |

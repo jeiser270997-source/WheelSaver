@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wheelsaver"
-version = "3.2.0"
+version = "3.2.1"
 description = "GitHub repo scraper + AI audit tool. Search 23k+ repos offline, audit projects via AI."
 readme = "README.md"
 license = {text = "MIT"}
@@ -21,17 +21,23 @@ dependencies = [
     "loguru",
     "openai",
     "aiosqlite",
+    "async-lru",
+    "beautifulsoup4",
 ]
 
 [project.optional-dependencies]
 web = ["streamlit", "pandas"]
-dev = ["pytest"]
+dev = ["pytest", "pytest-asyncio", "pytest-cov", "ruff"]
+
+[project.scripts]
+wheelsaver = "cli:app"
 
 [project.urls]
 Homepage = "https://github.com/JeisarGtz/Top_Repos"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100

@@ -63,7 +63,7 @@ Para cada categoria, determina si el proyecto ya lo cubre o necesita accion:
 
 Para cada categoria donde falte algo, ejecuta:
 ```
-python cli.py search <keywords> --limit 5
+wheelsaver search <keywords> --limit 5
 ```
 
 ---
