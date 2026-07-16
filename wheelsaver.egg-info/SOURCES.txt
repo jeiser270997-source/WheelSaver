@@ -9,6 +9,8 @@ api/repository.py
 scraper/__init__.py
 scraper/db_manager.py
 scraper/github_fetcher.py
+scripts/import_from_evanli.py
+scripts/scrape_gitstar_ranking.py
 services/project_auditor.py
 tests/test_api_async.py
 tests/test_db_manager.py
