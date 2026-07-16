@@ -170,14 +170,14 @@ class AskRequest(BaseModel):
 @limiter.limit("5/minute")
 async def ask_agent(request: Request, req: AskRequest, db: aiosqlite.Connection = Depends(get_db)):
     """Realiza una consulta al LLM multi-proveedor (RAG) usando repositorios como contexto. Failover automático entre free tiers."""
-    from api.llm import ask_llm_about_repos
+    from api.llm import ask_llm_about_repos, expand_search_query
 
-    # Extraer posibles keywords de la pregunta para buscar contexto
-    keywords = [
-        kw.strip() for kw in req.question.replace("?", "").replace("¿", "").split() if len(kw) > 3
-    ]
+    # Extraer keywords usando el LLM para busqueda inteligente
+    keywords = await expand_search_query(req.question)
 
-    if len(keywords) == 1:
+    if not keywords:
+        repos = []
+    elif len(keywords) == 1:
         repos = await search_repos_async(db, keywords[0], limit=10)
     else:
         repos = await search_repos_multi_keywords_async(db, keywords, limit=10)

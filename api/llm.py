@@ -341,3 +341,67 @@ async def ask_llm_about_repos(question: str, repos: list[dict], **kwargs) -> str
 
 # ─── Alias backwards-compatible ───────────────────────────────────────────────
 ask_deepseek_about_repos = ask_llm_about_repos
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Funciones adicionales (Smart Search & Skillify)
+# ──────────────────────────────────────────────────────────────────────────────
+
+async def expand_search_query(question: str) -> list[str]:
+    """
+    Toma una pregunta natural del usuario y usa el LLM para extraer keywords 
+    técnicas exactas que puedan coincidir en GitHub.
+    """
+    sys_prompt = (
+        "Eres un experto en GitHub. El usuario hará una pregunta en lenguaje natural. "
+        "Extrae 3 a 6 keywords o tags técnicos exactos (en inglés) que un repositorio de GitHub "
+        "para este propósito usaría. Responde SÓLO con las palabras clave separadas por comas. "
+        "No des explicaciones."
+    )
+    
+    try:
+        # Usamos temperature=0.0 para consistencia
+        resp = await ask_llm(system_prompt=sys_prompt, user_prompt=question, temperature=0.0)
+        # Limpiar la respuesta (quitar puntos finales, saltos de línea, etc.)
+        cleaned = resp.replace(".", "").replace("\n", "").strip()
+        keywords = [k.strip() for k in cleaned.split(",") if k.strip()]
+        return keywords if keywords else question.split()
+    except Exception:
+        # Fallback a split basico
+        return [kw.strip() for kw in question.replace("?", "").replace("¿", "").split() if len(kw) > 3]
+
+
+async def generate_skill_from_repo(repo_name: str, description: str, readme: str) -> str:
+    """
+    Genera un archivo SKILL.md de Antigravity (Agente de IA) basado en el repo.
+    """
+    sys_prompt = (
+        "Eres un ingeniero de IA creando un 'Skill' para otro agente autónomo de IA (Antigravity). "
+        "El agente necesita saber cómo usar este repositorio de GitHub en el proyecto del usuario. "
+        "Genera el contenido de un archivo SKILL.md."
+    )
+    
+    # Recortar el readme si es demasiado grande para evitar exceder tokens
+    readme_snippet = readme[:15000] if readme else "Sin README"
+    
+    user_prompt = f"""
+Basado en el repositorio {repo_name}, genera un SKILL.md.
+Descripción: {description}
+README:
+{readme_snippet}
+
+REGLAS DEL SKILL.MD:
+1. DEBE comenzar con frontmatter YAML (name: NombreSkill, description: Breve descripción de qué hace).
+2. Luego un título markdown #.
+3. Secciones útiles para una IA: ¿Cuándo usarlo?, ¿Cómo integrarlo?, Comandos útiles, Ejemplos de código, y "Gotchas" (errores comunes).
+4. Escribe directamente el contenido, sin usar bloques de código envolventes markdown grandes ```markdown, solo el contenido puro.
+"""
+    try:
+        resp = await ask_llm(system_prompt=sys_prompt, user_prompt=user_prompt, temperature=0.3)
+        if not resp.startswith("---"):
+            resp = f"---\n{resp.lstrip()}"
+            if "\n#" in resp and "\n---\n#" not in resp:
+                resp = resp.replace("\n#", "\n---\n#", 1)
+        return resp
+    except Exception as e:
+        return f"---\nname: Skill Error\ndescription: Falló la generacion\n---\nError: {e}"
