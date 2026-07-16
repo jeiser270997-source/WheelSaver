@@ -86,6 +86,18 @@ def parse_repos_from_html(html):
 
     return repos
 
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=1, min=4, max=60),
+    retry=retry_if_exception_type((httpx.RequestError, httpx.HTTPStatusError)),
+    reraise=True
+)
+def fetch_page(client, url):
+    resp = client.get(url)
+    resp.raise_for_status()
+    return resp
 
 def scrape_gitstar(start_page=1, max_pages=None):
     """Scrapea gitstar-ranking.com desde start_page hasta max_pages."""
@@ -97,7 +109,6 @@ def scrape_gitstar(start_page=1, max_pages=None):
 
     all_repos = []
     page = start_page
-    consecutive_errors = 0
 
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
@@ -108,29 +119,12 @@ def scrape_gitstar(start_page=1, max_pages=None):
             url = BASE_URL if page_num == 1 else f"{BASE_URL}?page={page_num}"
 
             try:
-                resp = client.get(url)
-                resp.raise_for_status()
-            except httpx.RequestError as e:
-                consecutive_errors += 1
-                wait = min(30, consecutive_errors * 5)
-                logger.warning(
-                    "Error pagina {}: {} (esperando {}s, intento {})",
-                    page_num,
-                    e,
-                    wait,
-                    consecutive_errors,
-                )
-                time.sleep(wait)
-                if consecutive_errors > 3:
-                    logger.error("Demasiados errores en gitstar, abortando")
-                    break
-                continue
-            except httpx.HTTPStatusError as e:
-                logger.warning("HTTP {} en pagina {}", e.response.status_code, page_num)
-                time.sleep(5)
+                resp = fetch_page(client, url)
+            except Exception as e:
+                logger.error("Error definitivo en pagina {}: {}", page_num, e)
                 continue
 
-            consecutive_errors = 0
+
             repos = parse_repos_from_html(resp.text)
             all_repos.extend(repos)
             time.sleep(REQUEST_DELAY)

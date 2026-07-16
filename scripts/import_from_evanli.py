@@ -135,18 +135,27 @@ def parse_md_table(text):
     return repos
 
 
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=1, min=4, max=60),
+    retry=retry_if_exception_type((httpx.RequestError, httpx.HTTPStatusError)),
+    reraise=True
+)
+def fetch_page(client, url):
+    resp = client.get(url)
+    resp.raise_for_status()
+    return resp
+
 def fetch_and_parse(url, label, client):
     """Descarga un archivo Markdown y parsea los repos."""
     try:
-        resp = client.get(url)
-        resp.raise_for_status()
+        resp = fetch_page(client, url)
         repos = parse_md_table(resp.text)
         return repos
-    except httpx.RequestError as e:
-        logger.error("Error conexion {}: {}", label, e)
-        return []
-    except httpx.HTTPStatusError as e:
-        logger.warning("HTTP {} en {}", e.response.status_code, label)
+    except Exception as e:
+        logger.error("Error definitivo en {}: {}", label, e)
         return []
 
 
