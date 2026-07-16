@@ -10,11 +10,12 @@ Para agregar un nuevo proveedor:
   3. Agrega la API key al .env
 """
 
-import os
 import json
+import os
+
 import httpx
-from openai import AsyncOpenAI
 from dotenv import load_dotenv
+from openai import AsyncOpenAI
 
 load_dotenv()
 
@@ -99,27 +100,31 @@ def _get_active_providers():
     for i, cfg in enumerate(_OPENAI_COMPATIBLE):
         api_key = os.getenv(cfg["env_key"])
         if api_key:
-            providers.append({
-                "name": cfg["name"],
-                "api_key": api_key,
-                "base_url": cfg["base_url"],
-                "model": cfg["model"],
-                "priority": i + 1,
-                "type": "openai",
-            })
+            providers.append(
+                {
+                    "name": cfg["name"],
+                    "api_key": api_key,
+                    "base_url": cfg["base_url"],
+                    "model": cfg["model"],
+                    "priority": i + 1,
+                    "type": "openai",
+                }
+            )
 
     # Proveedores nativos
     for i, cfg in enumerate(_NATIVE_PROVIDERS):
         api_key = os.getenv(cfg["env_key"])
         if api_key:
-            providers.append({
-                "name": cfg["name"],
-                "api_key": api_key,
-                "handler": cfg["handler"],
-                "model": cfg["model"],
-                "priority": len(_OPENAI_COMPATIBLE) + i + 1,
-                "type": "native",
-            })
+            providers.append(
+                {
+                    "name": cfg["name"],
+                    "api_key": api_key,
+                    "handler": cfg["handler"],
+                    "model": cfg["model"],
+                    "priority": len(_OPENAI_COMPATIBLE) + i + 1,
+                    "type": "native",
+                }
+            )
 
     # Ordenar por prioridad
     providers.sort(key=lambda p: p["priority"])
@@ -137,9 +142,14 @@ def _build_prompts(question: str, repos: list[dict]) -> tuple[str, str]:
     if not context:
         context = "No se encontraron repositorios relevantes en la base de datos."
 
-    system_prompt = """Eres WheelSaver AI, un ingeniero de software senior altamente experimentado.
-Tu objetivo es analizar la pregunta del usuario y responder recomendando los mejores repositorios basándote estrictamente en el contexto proporcionado (los resultados de la base de datos local).
-Sé directo, explica brevemente por qué recomiendas una librería sobre otra, y usa un formato Markdown limpio."""
+    system_prompt = (
+        "Eres WheelSaver AI, un ingeniero de software senior altamente experimentado.\n"
+        "Tu objetivo es analizar la pregunta del usuario y responder recomendando los "
+        "mejores repositorios basándote estrictamente en el contexto proporcionado "
+        "(los resultados de la base de datos local).\n"
+        "Sé directo, explica brevemente por qué recomiendas una librería sobre otra, "
+        "y usa un formato Markdown limpio."
+    )
 
     user_prompt = f"""Pregunta del usuario: "{question}"
 
@@ -155,7 +165,10 @@ Por favor, analiza estos repositorios y responde a la pregunta de la mejor maner
 # Handlers por tipo de proveedor
 # ──────────────────────────────────────────────────────────────────────────────
 
-async def _ask_openai_compatible(provider: dict, system_prompt: str, user_prompt: str, **kwargs) -> str:
+
+async def _ask_openai_compatible(
+    provider: dict, system_prompt: str, user_prompt: str, **kwargs
+) -> str:
     """Consulta a un proveedor con API compatible con OpenAI."""
     client = AsyncOpenAI(
         api_key=provider["api_key"],
@@ -300,6 +313,7 @@ async def ask_llm(system_prompt: str = "", user_prompt: str = "", **kwargs) -> s
 # ──────────────────────────────────────────────────────────────────────────────
 # Función principal para RAG (backwards compatible + mejorada)
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 async def ask_llm_about_repos(question: str, repos: list[dict], **kwargs) -> str:
     """

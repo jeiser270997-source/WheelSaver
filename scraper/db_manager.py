@@ -1,7 +1,8 @@
-import sqlite3
-import os
 import hashlib
+import os
 import shutil
+import sqlite3
+
 import httpx
 from loguru import logger
 
@@ -114,17 +115,19 @@ def upsert_repos(repos_list, conn=None):
         data = []
         for repo in repos_list:
             topics_str = ",".join(repo.get("topics", []))
-            data.append((
-                repo["id"],
-                repo["name"],
-                repo["owner"],
-                repo.get("description", ""),
-                repo["url"],
-                repo["stars"],
-                repo.get("language", ""),
-                topics_str,
-                repo.get("updated_at", ""),
-            ))
+            data.append(
+                (
+                    repo["id"],
+                    repo["name"],
+                    repo["owner"],
+                    repo.get("description", ""),
+                    repo["url"],
+                    repo["stars"],
+                    repo.get("language", ""),
+                    topics_str,
+                    repo.get("updated_at", ""),
+                )
+            )
 
         cursor.executemany(
             """
@@ -292,7 +295,9 @@ def search_repos_multi_keywords(keywords, limit=20, conn=None):
     if not repos and owns_conn:
         repo_dicts = _fetch_live_github(" ".join(keywords), limit)
         if repo_dicts:
-            logger.info("+{} repos encontrados via GitHub API y guardados en BD local", len(repo_dicts))
+            logger.info(
+                "+{} repos encontrados via GitHub API y guardados en BD local", len(repo_dicts)
+            )
             repos = repo_dicts[:limit]
 
     return repos
@@ -402,7 +407,9 @@ def get_all_repos(conn=None):
         owns_conn = True
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT name, description, topics, url, stars FROM repos ORDER BY stars DESC")
+        cursor.execute(
+            "SELECT name, description, topics, url, stars FROM repos ORDER BY stars DESC"
+        )
         results = cursor.fetchall()
     finally:
         if owns_conn:

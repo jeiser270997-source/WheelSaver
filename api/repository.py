@@ -1,8 +1,10 @@
-import aiosqlite
-from async_lru import alru_cache
 import logging
 import os
+
+import aiosqlite
 import httpx
+from async_lru import alru_cache
+
 
 async def search_repos_async(db: aiosqlite.Connection, keyword: str, limit: int = 5):
     """Busqueda vectorial/full-text en SQLite (FTS5 + fallback LIKE)."""
@@ -37,6 +39,7 @@ async def search_repos_async(db: aiosqlite.Connection, keyword: str, limit: int 
     except Exception as e:
         logging.error(f"Error búsqueda asíncrona: {e}")
         return []
+
 
 async def search_repos_multi_keywords_async(
     db: aiosqlite.Connection, keywords: list[str], limit: int = 5
@@ -182,7 +185,9 @@ async def get_top_async(db: aiosqlite.Connection, limit: int, language: str):
     return [dict(r) for r in repos]
 
 
-async def _fetch_live_github_async(db: aiosqlite.Connection, query: str, limit: int = 20) -> list[dict]:
+async def _fetch_live_github_async(
+    db: aiosqlite.Connection, query: str, limit: int = 20
+) -> list[dict]:
     """
     Version asincrona de live fallback. Consulta la API REST de GitHub
     cuando la BD local no tiene resultados. Persiste en BD local.
@@ -232,20 +237,23 @@ async def _fetch_live_github_async(db: aiosqlite.Connection, query: str, limit: 
 
         # Persistir en BD local
         if live_repos:
-            await _upsert_repos_async(db, [
-                {
-                    "id": str(item["id"]),
-                    "name": item["name"],
-                    "owner": item["owner"]["login"],
-                    "description": item.get("description") or "",
-                    "url": item["html_url"],
-                    "stars": item["stargazers_count"],
-                    "language": item.get("language") or "",
-                    "topics": ",".join(item.get("topics", [])),
-                    "updated_at": item.get("updated_at", ""),
-                }
-                for item in items
-            ])
+            await _upsert_repos_async(
+                db,
+                [
+                    {
+                        "id": str(item["id"]),
+                        "name": item["name"],
+                        "owner": item["owner"]["login"],
+                        "description": item.get("description") or "",
+                        "url": item["html_url"],
+                        "stars": item["stargazers_count"],
+                        "language": item.get("language") or "",
+                        "topics": ",".join(item.get("topics", [])),
+                        "updated_at": item.get("updated_at", ""),
+                    }
+                    for item in items
+                ],
+            )
 
         return live_repos
 
@@ -256,21 +264,24 @@ async def _fetch_live_github_async(db: aiosqlite.Connection, query: str, limit: 
         logging.error("Error en async live fallback a GitHub API: %s", e)
         return []
 
+
 async def _upsert_repos_async(db: aiosqlite.Connection, repos_list: list[dict]):
     """Versión asíncrona de upsert_repos para no bloquear el Event Loop."""
     data = []
     for repo in repos_list:
-        data.append((
-            repo["id"],
-            repo["name"],
-            repo["owner"],
-            repo.get("description", ""),
-            repo["url"],
-            repo["stars"],
-            repo.get("language", ""),
-            repo.get("topics", ""),
-            repo.get("updated_at", ""),
-        ))
+        data.append(
+            (
+                repo["id"],
+                repo["name"],
+                repo["owner"],
+                repo.get("description", ""),
+                repo["url"],
+                repo["stars"],
+                repo.get("language", ""),
+                repo.get("topics", ""),
+                repo.get("updated_at", ""),
+            )
+        )
 
     await db.executemany(
         """
@@ -289,7 +300,7 @@ async def _upsert_repos_async(db: aiosqlite.Connection, repos_list: list[dict]):
         data,
     )
     await db.commit()
-    
+
     try:
         await db.execute("INSERT INTO repos_fts(repos_fts) VALUES('rebuild')")
         await db.commit()

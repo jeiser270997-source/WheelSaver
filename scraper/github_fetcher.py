@@ -1,11 +1,12 @@
 import os
-import sqlite3
-import httpx
 import time
 from datetime import datetime, timedelta, timezone
+
+import httpx
 from dotenv import load_dotenv
 from loguru import logger
-from scraper.db_manager import upsert_repos, DB_PATH, init_db
+
+from scraper.db_manager import init_db, upsert_repos
 
 load_dotenv(override=True)
 
@@ -263,4 +264,3 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     fetch_top_repos(min_stars=args.min_stars)
-

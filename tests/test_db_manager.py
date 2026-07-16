@@ -7,8 +7,6 @@ search_repos, search_repos_multi_keywords, get_stats, rebuild_fts.
 Las funciones aceptan conn= para inyectar la conexion in-memory del fixture.
 """
 
-import sqlite3
-import pytest
 import os
 import sys
 
@@ -148,7 +146,7 @@ def test_upsert_repos_update(db_conn):
 
 def test_upsert_external_repos_generates_id(db_conn):
     """upsert_external_repos debe generar ID si no viene."""
-    from scraper.db_manager import upsert_external_repos, make_repo_id
+    from scraper.db_manager import make_repo_id, upsert_external_repos
 
     repo = {
         "name": "auto-id-repo",

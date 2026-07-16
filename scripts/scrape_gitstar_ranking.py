@@ -12,17 +12,17 @@ Uso:
     python cli.py import gitstar [--pages N]
 """
 
-import sys
 import os
+import sys
 import time
 
 import httpx
 from bs4 import BeautifulSoup
-from tqdm import tqdm
 from loguru import logger
+from tqdm import tqdm
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from scraper.db_manager import upsert_external_repos, get_stats
+from scraper.db_manager import get_stats, upsert_external_repos
 
 TOTAL_PAGES = 100
 REPOS_PER_PAGE = 50

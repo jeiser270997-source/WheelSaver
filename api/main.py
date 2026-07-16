@@ -9,21 +9,21 @@ Uso:
 Documentacion automatica: http://localhost:8000/docs
 """
 
-from fastapi import FastAPI, Query, HTTPException, Depends, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
 import aiosqlite
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from api.database import get_db
 from api.repository import (
+    get_languages_async,
+    get_repo_async,
+    get_stats_async,
+    get_top_async,
+    list_repos_async,
     search_repos_async,
     search_repos_multi_keywords_async,
-    get_stats_async,
-    get_repo_async,
-    get_languages_async,
-    list_repos_async,
-    get_top_async,
 )
 
 app = FastAPI(
@@ -143,24 +143,27 @@ async def trigger_scrape(
 ):
     """Lanza el scraper de GitHub de forma asíncrona en el mismo proceso."""
     from scraper.github_fetcher import fetch_top_repos
+
     background_tasks.add_task(fetch_top_repos, min_stars)
     return {"status": "ok", "message": f"Scraper iniciado (min_stars={min_stars})"}
 
 
 from pydantic import BaseModel
+
+
 class AskRequest(BaseModel):
     question: str
 
+
 @app.post("/ask")
-async def ask_agent(
-    req: AskRequest,
-    db: aiosqlite.Connection = Depends(get_db)
-):
+async def ask_agent(req: AskRequest, db: aiosqlite.Connection = Depends(get_db)):
     """Realiza una consulta al LLM multi-proveedor (RAG) usando repositorios como contexto. Failover automático entre free tiers."""
     from api.llm import ask_llm_about_repos
 
     # Extraer posibles keywords de la pregunta para buscar contexto
-    keywords = [kw.strip() for kw in req.question.replace("?", "").replace("¿", "").split() if len(kw) > 3]
+    keywords = [
+        kw.strip() for kw in req.question.replace("?", "").replace("¿", "").split() if len(kw) > 3
+    ]
 
     if len(keywords) == 1:
         repos = await search_repos_async(db, keywords[0], limit=10)
@@ -170,6 +173,5 @@ async def ask_agent(
     answer = await ask_llm_about_repos(req.question, repos)
     return {"question": req.question, "context_repos_used": len(repos), "answer": answer}
 
+
 app.mount("/web", StaticFiles(directory="frontend", html=True), name="frontend")
-
-

@@ -13,13 +13,13 @@ Uso:
     python cli.py swap <feature>                   # Busca alternativa a lo que codeas
 """
 
-import re
 import os
+import re
+
 import typer
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
-from rich.rule import Rule
+from rich.table import Table
 
 app = typer.Typer(
     name="wheelsaver",
@@ -120,7 +120,7 @@ def scrape(
     """Ejecuta el scraper de GitHub GraphQL (barre desde Top 1 hacia abajo)."""
     from scraper.github_fetcher import fetch_top_repos
 
-    console.print(f"[bold blue]Iniciando scraper GraphQL...[/bold blue]")
+    console.print("[bold blue]Iniciando scraper GraphQL...[/bold blue]")
     fetch_top_repos(min_stars=min_stars)
 
 
@@ -140,6 +140,7 @@ def import_gitstar(
 ):
     """Scrapea gitstar-ranking.com para rankings de repos."""
     import sys
+
     import scripts.scrape_gitstar_ranking as gs
 
     console.print("[bold blue]Scrapeando gitstar-ranking.com...[/bold blue]")
@@ -175,7 +176,8 @@ def api(
 @app.command()
 def docker():
     """Levanta WheelSaver en Docker (docker compose up)."""
-    import subprocess, sys
+    import subprocess
+    import sys
 
     console.print("[bold blue]Levantando WheelSaver con Docker...[/bold blue]")
     result = subprocess.run(
@@ -193,15 +195,11 @@ def docker():
         console.print(result.stderr or result.stdout)
 
 
-
-
-
 @app.command()
 def ready(
     path: str = typer.Option(".", "--path", help="Ruta del proyecto a analizar"),
 ):
     """Escanea un proyecto y genera checklist de lo que le falta."""
-    import os
     from pathlib import Path
 
     target = Path(path).resolve()
@@ -210,9 +208,10 @@ def ready(
 
     # Detectar stack usando la capa de servicio
     import sys
+
     sys.path.append(str(Path(__file__).parent))
     from services.project_auditor import detect_stack_and_framework
-    
+
     audit_data = detect_stack_and_framework(target)
 
     console.print(
@@ -226,7 +225,7 @@ def ready(
     )
 
     # Checklist
-    checks = audit_data['checks']
+    checks = audit_data["checks"]
 
     table = Table(title="Checklist del Proyecto")
     table.add_column("Estado", justify="center")
@@ -338,22 +337,31 @@ def skillify(
         )
     )
 
+
 import asyncio
+
 
 @app.command()
 def ask(
     question: str = typer.Argument(
-        ..., help="Tu pregunta para la IA. Ej: 'Cual es el mejor framework de python para graficos?'"
+        ...,
+        help="Tu pregunta para la IA. Ej: 'Cual es el mejor framework de python para graficos?'",
     ),
     provider: str = typer.Option(
-        None, "--provider", "-p", help="Proveedor especifico (groq, cerebras, google, mistral, etc.)"
+        None,
+        "--provider",
+        "-p",
+        help="Proveedor especifico (groq, cerebras, google, mistral, etc.)",
     ),
 ):
     """Consulta a la IA (multi-proveedor) usando la base de datos local como contexto (RAG). Usa failover automático entre proveedores free tier."""
     console.print(f"[bold blue]Consultando a la IA sobre:[/bold blue] {question}")
 
     from scraper.db_manager import search_repos_multi_keywords
-    keywords = [kw.strip() for kw in question.replace("?", "").replace("¿", "").split() if len(kw) > 3]
+
+    keywords = [
+        kw.strip() for kw in question.replace("?", "").replace("¿", "").split() if len(kw) > 3
+    ]
     repos = search_repos_multi_keywords(keywords, limit=10)
 
     if repos:
@@ -366,9 +374,9 @@ def ask(
     with console.status("[bold green]Generando respuesta de la IA...[/bold green]"):
         answer = asyncio.run(ask_llm_about_repos(question, repos))
 
-    console.print(Panel(answer, title="[bold magenta]WheelSaver AI[/bold magenta]", border_style="cyan"))
-
-
+    console.print(
+        Panel(answer, title="[bold magenta]WheelSaver AI[/bold magenta]", border_style="cyan")
+    )
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
-import aiosqlite
 import os
 import shutil
+
+import aiosqlite
 
 DB_PATH = os.path.join(os.path.expanduser("~"), ".wheelsaver", "top_repos.db")
 

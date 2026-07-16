@@ -6,16 +6,16 @@ que la BD real, mas repos de muestra para los tests.
 Incluye fixtures async para tests de la API REST (FastAPI).
 """
 
-import sqlite3
 import os
+import sqlite3
 import sys
-import pytest
+
 import aiosqlite
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from scraper.db_manager import make_repo_id, DB_PATH
-
+from scraper.db_manager import make_repo_id
 
 SAMPLE_REPOS = [
     {

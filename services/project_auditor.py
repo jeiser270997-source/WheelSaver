@@ -1,5 +1,5 @@
-import os
 from pathlib import Path
+
 
 def detect_stack_and_framework(target: Path) -> dict:
     has_python = (
@@ -21,6 +21,7 @@ def detect_stack_and_framework(target: Path) -> dict:
     framework = ""
     if has_js and (target / "package.json").exists():
         import json
+
         try:
             pkg = json.loads((target / "package.json").read_text(encoding="utf-8"))
             deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
@@ -69,5 +70,5 @@ def detect_stack_and_framework(target: Path) -> dict:
             ("🔐 .env / Secrets", has_env, "security", "dotenv environment secrets"),
             ("📋 .gitignore", has_gitignore, "git", "gitignore template"),
             ("🔧 Git", has_git, "git", "git version-control"),
-        ]
+        ],
     }

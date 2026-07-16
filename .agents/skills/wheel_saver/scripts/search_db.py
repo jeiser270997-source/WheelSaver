@@ -1,7 +1,7 @@
+import json
+import os
 import sqlite3
 import sys
-import os
-import json
 
 
 def search_db(keywords):

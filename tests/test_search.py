@@ -5,8 +5,6 @@ Cubre: busqueda por keyword exacta, parcial, multi-keyword,
 sin resultados, y caracteres especiales.
 """
 
-import sqlite3
-import pytest
 import os
 import sys
 

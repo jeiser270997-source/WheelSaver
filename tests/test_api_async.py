@@ -1,8 +1,9 @@
-import pytest
 import aiosqlite
-from httpx import AsyncClient, ASGITransport
-from api.main import app
+import pytest
+from httpx import ASGITransport, AsyncClient
+
 from api.database import get_db
+from api.main import app
 
 
 async def _build_empty_test_db():
