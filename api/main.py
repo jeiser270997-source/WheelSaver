@@ -10,7 +10,7 @@ Documentacion automatica: http://localhost:8000/docs
 """
 
 import aiosqlite
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -26,11 +26,20 @@ from api.repository import (
     search_repos_multi_keywords_async,
 )
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+limiter = Limiter(key_func=get_remote_address)
+
 app = FastAPI(
     title="WheelSaver API",
     description="Busca y analiza repositorios de GitHub desde la base de datos local de WheelSaver. RAG multi-proveedor con failover automático.",
     version="3.3.0",
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,7 +63,9 @@ async def health(db: aiosqlite.Connection = Depends(get_db)):
 
 
 @app.get("/search")
+@limiter.limit("20/minute")
 async def search(
+    request: Request,
     q: str = Query(..., description="Keyword(s) para buscar"),
     limit: int = Query(10, ge=1, le=100, description="Max resultados"),
     language: str = Query(None, description="Filtrar por lenguaje"),
@@ -156,7 +167,8 @@ class AskRequest(BaseModel):
 
 
 @app.post("/ask")
-async def ask_agent(req: AskRequest, db: aiosqlite.Connection = Depends(get_db)):
+@limiter.limit("5/minute")
+async def ask_agent(request: Request, req: AskRequest, db: aiosqlite.Connection = Depends(get_db)):
     """Realiza una consulta al LLM multi-proveedor (RAG) usando repositorios como contexto. Failover automático entre free tiers."""
     from api.llm import ask_llm_about_repos
 

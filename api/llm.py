@@ -263,6 +263,9 @@ _NATIVE_HANDLERS = {
 }
 
 
+from async_lru import alru_cache
+
+@alru_cache(maxsize=128, ttl=3600)
 async def ask_llm(system_prompt: str = "", user_prompt: str = "", **kwargs) -> str:
     """
     Consulta al mejor LLM disponible entre los proveedores configurados.

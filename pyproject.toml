@@ -23,6 +23,7 @@ dependencies = [
     "aiosqlite",
     "async-lru",
     "beautifulsoup4",
+    "slowapi",
 ]
 
 [project.optional-dependencies]
