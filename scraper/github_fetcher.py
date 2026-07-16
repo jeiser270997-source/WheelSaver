@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sqlite3
 import httpx
 import time
@@ -15,8 +15,8 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 # UMBRAL DE CALIDAD (repos de 500-1000 estrellas)
 # Se aplican filtros extra para no guardar repos desatendidos
 # ============================================================
-QUALITY_FILTER_THRESHOLD = 1000  # por debajo aplicamos filtros
-MAX_INACTIVE_DAYS = 365  # sin commits en >1 año = desatendido
+QUALITY_FILTER_THRESHOLD = int(os.getenv("QUALITY_FILTER_THRESHOLD", 1000))
+MAX_INACTIVE_DAYS = int(os.getenv("MAX_INACTIVE_DAYS", 365))
 
 
 def is_active_repo(updated_at_str, stars):

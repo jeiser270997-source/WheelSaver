@@ -1,4 +1,4 @@
-﻿.env
+.env
 __pycache__/
 *.pyc
 venv/
@@ -7,3 +7,10 @@ venv/
 !.agents/skills/
 !.agents/skills/**
 .coverage
+
+# Datos y logs locales
+data/
+*.db
+*.db-shm
+*.db-wal
+repomix_*.md

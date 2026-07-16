@@ -232,8 +232,7 @@ async def _fetch_live_github_async(db: aiosqlite.Connection, query: str, limit: 
 
         # Persistir en BD local
         if live_repos:
-            from scraper.db_manager import upsert_repos
-            upsert_repos([
+            await _upsert_repos_async(db, [
                 {
                     "id": str(item["id"]),
                     "name": item["name"],
@@ -256,3 +255,43 @@ async def _fetch_live_github_async(db: aiosqlite.Connection, query: str, limit: 
     except Exception as e:
         logging.error("Error en async live fallback a GitHub API: %s", e)
         return []
+
+async def _upsert_repos_async(db: aiosqlite.Connection, repos_list: list[dict]):
+    """Versión asíncrona de upsert_repos para no bloquear el Event Loop."""
+    data = []
+    for repo in repos_list:
+        data.append((
+            repo["id"],
+            repo["name"],
+            repo["owner"],
+            repo.get("description", ""),
+            repo["url"],
+            repo["stars"],
+            repo.get("language", ""),
+            repo.get("topics", ""),
+            repo.get("updated_at", ""),
+        ))
+
+    await db.executemany(
+        """
+        INSERT INTO repos (id, name, owner, description, url, stars, language, topics, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            name=excluded.name,
+            owner=excluded.owner,
+            description=excluded.description,
+            url=excluded.url,
+            stars=excluded.stars,
+            language=excluded.language,
+            topics=excluded.topics,
+            updated_at=excluded.updated_at
+        """,
+        data,
+    )
+    await db.commit()
+    
+    try:
+        await db.execute("INSERT INTO repos_fts(repos_fts) VALUES('rebuild')")
+        await db.commit()
+    except Exception:
+        pass

@@ -193,16 +193,7 @@ def docker():
         console.print(result.stderr or result.stdout)
 
 
-@app.command()
-def dashboard():
-    """Lanza el dashboard web con Streamlit."""
-    import subprocess, sys
 
-    console.print("[bold blue]Lanzando dashboard Streamlit...[/bold blue]")
-    subprocess.run(
-        [sys.executable, "-m", "streamlit", "run", "dashboard.py"],
-        cwd=os.path.dirname(os.path.abspath(__file__)),
-    )
 
 
 @app.command()
@@ -217,71 +208,17 @@ def ready(
     console.print(f"[bold]Analizando proyecto:[/bold] {target}")
     console.print()
 
-    # Detectar stack
-    has_python = (
-        (target / "requirements.txt").exists()
-        or (target / "pyproject.toml").exists()
-        or (target / "Pipfile").exists()
-    )
-    has_js = (target / "package.json").exists()
-    has_rust = (target / "Cargo.toml").exists()
-    has_go = (target / "go.mod").exists()
-    has_docker = (target / "Dockerfile").exists() or (target / "docker-compose.yml").exists()
-    has_ci = (target / ".github" / "workflows").exists()
-    has_tests = any((target / d).exists() for d in ["tests", "test", "__tests__", "spec"])
-    has_readme = (target / "README.md").exists()
-    has_git = (target / ".git").exists()
-    has_env = (target / ".env").exists() or (target / ".env.example").exists()
-    has_gitignore = (target / ".gitignore").exists()
-
-    # Detectar frameworks
-    framework = ""
-    if has_js and (target / "package.json").exists():
-        import json
-
-        try:
-            pkg = json.loads((target / "package.json").read_text())
-            deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
-            if "next" in deps:
-                framework = "Next.js"
-            elif "react" in deps:
-                framework = "React"
-            elif "vue" in deps:
-                framework = "Vue"
-            elif "svelte" in deps:
-                framework = "Svelte"
-            elif "express" in deps:
-                framework = "Express"
-            has_tests = has_tests or "jest" in deps or "vitest" in deps or "cypress" in deps
-            has_ci = has_ci or "husky" in deps or "lint-staged" in deps
-        except:
-            pass
-    elif has_python and (target / "requirements.txt").exists():
-        content = (target / "requirements.txt").read_text().lower()
-        if "fastapi" in content:
-            framework = "FastAPI"
-        elif "django" in content:
-            framework = "Django"
-        elif "flask" in content:
-            framework = "Flask"
-        has_tests = has_tests or "pytest" in content
-
-    # Determinar stack
-    stacks = []
-    if has_python:
-        stacks.append("Python")
-    if has_js:
-        stacks.append("JavaScript/TypeScript")
-    if has_rust:
-        stacks.append("Rust")
-    if has_go:
-        stacks.append("Go")
-    stack_str = " + ".join(stacks) if stacks else "No detectado"
+    # Detectar stack usando la capa de servicio
+    import sys
+    sys.path.append(str(Path(__file__).parent))
+    from services.project_auditor import detect_stack_and_framework
+    
+    audit_data = detect_stack_and_framework(target)
 
     console.print(
         Panel(
-            f"[bold]Stack:[/bold] {stack_str}\n"
-            f"[bold]Framework:[/bold] {framework or 'No detectado'}\n"
+            f"[bold]Stack:[/bold] {audit_data['stack_str']}\n"
+            f"[bold]Framework:[/bold] {audit_data['framework'] or 'No detectado'}\n"
             f"[bold]Ruta:[/bold] {target}",
             title="Proyecto Detectado",
             border_style="blue",
@@ -289,15 +226,7 @@ def ready(
     )
 
     # Checklist
-    checks = [
-        ("🔬 Testing", has_tests, "testing", "pytest jest vitest playwright"),
-        ("🚀 CI/CD", has_ci, "devops", "ci/cd actions deployment"),
-        ("🐳 Docker", has_docker, "devops", "docker container dockerfile"),
-        ("📝 README", has_readme, "docs", "documentation readme"),
-        ("🔐 .env / Secrets", has_env, "security", "dotenv environment secrets"),
-        ("📋 .gitignore", has_gitignore, "git", "gitignore template"),
-        ("🔧 Git", has_git, "git", "git version-control"),
-    ]
+    checks = audit_data['checks']
 
     table = Table(title="Checklist del Proyecto")
     table.add_column("Estado", justify="center")
@@ -435,13 +364,7 @@ def ask(
     from api.llm import ask_llm_about_repos
 
     with console.status("[bold green]Generando respuesta de la IA...[/bold green]"):
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        answer = loop.run_until_complete(ask_llm_about_repos(question, repos))
+        answer = asyncio.run(ask_llm_about_repos(question, repos))
 
     console.print(Panel(answer, title="[bold magenta]WheelSaver AI[/bold magenta]", border_style="cyan"))
 

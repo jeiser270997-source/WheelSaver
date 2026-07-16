@@ -108,51 +108,52 @@ def upsert_repos(repos_list, conn=None):
     if conn is None:
         conn = init_db()
         owns_conn = True
-    cursor = conn.cursor()
-
-    data = []
-    for repo in repos_list:
-        topics_str = ",".join(repo.get("topics", []))
-        data.append((
-            repo["id"],
-            repo["name"],
-            repo["owner"],
-            repo.get("description", ""),
-            repo["url"],
-            repo["stars"],
-            repo.get("language", ""),
-            topics_str,
-            repo.get("updated_at", ""),
-        ))
-
-    cursor.executemany(
-        """
-        INSERT INTO repos (id, name, owner, description, url, stars, language, topics, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-            name=excluded.name,
-            owner=excluded.owner,
-            description=excluded.description,
-            url=excluded.url,
-            stars=excluded.stars,
-            language=excluded.language,
-            topics=excluded.topics,
-            updated_at=excluded.updated_at
-        """,
-        data,
-    )
-
-    conn.commit()
-
-    # Sincronizar FTS después de inserts batch
     try:
-        cursor.execute("INSERT INTO repos_fts(repos_fts) VALUES('rebuild')")
-        conn.commit()
-    except Exception:
-        pass
+        cursor = conn.cursor()
 
-    if owns_conn:
-        conn.close()
+        data = []
+        for repo in repos_list:
+            topics_str = ",".join(repo.get("topics", []))
+            data.append((
+                repo["id"],
+                repo["name"],
+                repo["owner"],
+                repo.get("description", ""),
+                repo["url"],
+                repo["stars"],
+                repo.get("language", ""),
+                topics_str,
+                repo.get("updated_at", ""),
+            ))
+
+        cursor.executemany(
+            """
+            INSERT INTO repos (id, name, owner, description, url, stars, language, topics, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                name=excluded.name,
+                owner=excluded.owner,
+                description=excluded.description,
+                url=excluded.url,
+                stars=excluded.stars,
+                language=excluded.language,
+                topics=excluded.topics,
+                updated_at=excluded.updated_at
+            """,
+            data,
+        )
+
+        conn.commit()
+
+        # Sincronizar FTS después de inserts batch
+        try:
+            cursor.execute("INSERT INTO repos_fts(repos_fts) VALUES('rebuild')")
+            conn.commit()
+        except Exception:
+            pass
+    finally:
+        if owns_conn:
+            conn.close()
 
 
 def upsert_external_repos(repos_list, conn=None):
@@ -176,37 +177,39 @@ def search_repos(keyword, limit=5, conn=None):
     if conn is None:
         conn = init_db()
         owns_conn = True
-    cursor = conn.cursor()
-
     try:
-        cursor.execute(
-            """
-            SELECT r.name, r.owner, r.description, r.url, r.stars, r.language, r.topics
-            FROM repos_fts f
-            JOIN repos r ON r.rowid = f.rowid
-            WHERE repos_fts MATCH ?
-            ORDER BY r.stars DESC
-            LIMIT ?
-        """,
-            (keyword, limit),
-        )
-    except sqlite3.OperationalError:
-        # Fallback: LIKE query
-        like_kw = f"%{keyword}%"
-        cursor.execute(
-            """
-            SELECT name, owner, description, url, stars, language, topics
-            FROM repos
-            WHERE name LIKE ? OR description LIKE ? OR topics LIKE ?
-            ORDER BY stars DESC
-            LIMIT ?
-        """,
-            (like_kw, like_kw, like_kw, limit),
-        )
+        cursor = conn.cursor()
 
-    results = cursor.fetchall()
-    if owns_conn:
-        conn.close()
+        try:
+            cursor.execute(
+                """
+                SELECT r.name, r.owner, r.description, r.url, r.stars, r.language, r.topics
+                FROM repos_fts f
+                JOIN repos r ON r.rowid = f.rowid
+                WHERE repos_fts MATCH ?
+                ORDER BY r.stars DESC
+                LIMIT ?
+            """,
+                (keyword, limit),
+            )
+        except sqlite3.OperationalError:
+            # Fallback: LIKE query
+            like_kw = f"%{keyword}%"
+            cursor.execute(
+                """
+                SELECT name, owner, description, url, stars, language, topics
+                FROM repos
+                WHERE name LIKE ? OR description LIKE ? OR topics LIKE ?
+                ORDER BY stars DESC
+                LIMIT ?
+            """,
+                (like_kw, like_kw, like_kw, limit),
+            )
+
+        results = cursor.fetchall()
+    finally:
+        if owns_conn:
+            conn.close()
 
     repos = []
     for r in results:
@@ -233,41 +236,43 @@ def search_repos_multi_keywords(keywords, limit=20, conn=None):
     if conn is None:
         conn = init_db()
         owns_conn = True
-    cursor = conn.cursor()
-
     try:
-        fts_query = " OR ".join(keywords)
-        cursor.execute(
-            """
-            SELECT DISTINCT r.name, r.owner, r.description, r.url, r.stars, r.language, r.topics
-            FROM repos_fts f
-            JOIN repos r ON r.rowid = f.rowid
-            WHERE repos_fts MATCH ?
-            ORDER BY r.stars DESC
-            LIMIT ?
-        """,
-            (fts_query, limit),
-        )
-    except sqlite3.OperationalError:
-        # Fallback: LIKE queries
-        seen = set()
-        cursor.execute(
-            "SELECT name, owner, description, url, stars, language, topics FROM repos ORDER BY stars DESC"
-        )
-        all_repos = cursor.fetchall()
-        results = []
-        for r in all_repos:
-            text = f"{r[0]} {r[1]} {r[2] or ''} {r[6] or ''}".lower()
-            if any(kw.lower() in text for kw in keywords):
-                if r[0] not in seen:
-                    seen.add(r[0])
-                    results.append(r)
-                    if len(results) >= limit:
-                        break
+        cursor = conn.cursor()
 
-    results = cursor.fetchall() if "results" not in dir() else results
-    if owns_conn:
-        conn.close()
+        try:
+            fts_query = " OR ".join(keywords)
+            cursor.execute(
+                """
+                SELECT DISTINCT r.name, r.owner, r.description, r.url, r.stars, r.language, r.topics
+                FROM repos_fts f
+                JOIN repos r ON r.rowid = f.rowid
+                WHERE repos_fts MATCH ?
+                ORDER BY r.stars DESC
+                LIMIT ?
+            """,
+                (fts_query, limit),
+            )
+        except sqlite3.OperationalError:
+            # Fallback: LIKE queries
+            seen = set()
+            cursor.execute(
+                "SELECT name, owner, description, url, stars, language, topics FROM repos ORDER BY stars DESC"
+            )
+            all_repos = cursor.fetchall()
+            results = []
+            for r in all_repos:
+                text = f"{r[0]} {r[1]} {r[2] or ''} {r[6] or ''}".lower()
+                if any(kw.lower() in text for kw in keywords):
+                    if r[0] not in seen:
+                        seen.add(r[0])
+                        results.append(r)
+                        if len(results) >= limit:
+                            break
+
+        results = cursor.fetchall() if "results" not in dir() else results
+    finally:
+        if owns_conn:
+            conn.close()
 
     repos = []
     for r in results:
@@ -364,28 +369,29 @@ def get_stats(conn=None):
     if conn is None:
         conn = init_db()
         owns_conn = True
-    cursor = conn.cursor()
-    stats = {}
-    cursor.execute("SELECT COUNT(*) FROM repos")
-    stats["total_repos"] = cursor.fetchone()[0]
+    try:
+        cursor = conn.cursor()
+        stats = {}
+        cursor.execute("SELECT COUNT(*) FROM repos")
+        stats["total_repos"] = cursor.fetchone()[0]
 
-    cursor.execute("SELECT MIN(stars), MAX(stars), AVG(stars) FROM repos")
-    row = cursor.fetchone()
-    stats["stars_min"] = row[0]
-    stats["stars_max"] = row[1]
-    stats["stars_avg"] = round(row[2]) if row[2] else 0
+        cursor.execute("SELECT MIN(stars), MAX(stars), AVG(stars) FROM repos")
+        row = cursor.fetchone()
+        stats["stars_min"] = row[0]
+        stats["stars_max"] = row[1]
+        stats["stars_avg"] = round(row[2]) if row[2] else 0
 
-    cursor.execute('SELECT COUNT(DISTINCT language) FROM repos WHERE language != ""')
-    stats["languages"] = cursor.fetchone()[0]
+        cursor.execute('SELECT COUNT(DISTINCT language) FROM repos WHERE language != ""')
+        stats["languages"] = cursor.fetchone()[0]
 
-    cursor.execute("""
-        SELECT language, COUNT(*) as cnt FROM repos
-        WHERE language != "" GROUP BY language ORDER BY cnt DESC LIMIT 10
-    """)
-    stats["top_languages"] = {r[0]: r[1] for r in cursor.fetchall()}
-
-    if owns_conn:
-        conn.close()
+        cursor.execute("""
+            SELECT language, COUNT(*) as cnt FROM repos
+            WHERE language != "" GROUP BY language ORDER BY cnt DESC LIMIT 10
+        """)
+        stats["top_languages"] = {r[0]: r[1] for r in cursor.fetchall()}
+    finally:
+        if owns_conn:
+            conn.close()
     return stats
 
 
@@ -394,9 +400,11 @@ def get_all_repos(conn=None):
     if conn is None:
         conn = init_db()
         owns_conn = True
-    cursor = conn.cursor()
-    cursor.execute("SELECT name, description, topics, url, stars FROM repos ORDER BY stars DESC")
-    results = cursor.fetchall()
-    if owns_conn:
-        conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT name, description, topics, url, stars FROM repos ORDER BY stars DESC")
+        results = cursor.fetchall()
+    finally:
+        if owns_conn:
+            conn.close()
     return results

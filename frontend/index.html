@@ -1,132 +1,111 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-    <meta http-equiv="X-UA-Compatible" content="ie=edge"/>
-    <title>WheelSaver Dashboard</title>
-    <!-- Tabler Core -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@latest/dist/css/tabler.min.css">
-    <style>
-      .hide { display: none; }
-    </style>
-  </head>
-  <body class="theme-light">
-    <div class="page">
-      <!-- Navbar -->
-      <header class="navbar navbar-expand-md navbar-light d-print-none">
-        <div class="container-xl">
-          <h1 class="navbar-brand navbar-brand-autodark d-none-navbar-horizontal pe-0 pe-md-3">
-            🛞 WheelSaver
-          </h1>
-          <div class="navbar-nav flex-row order-md-last">
-            <div class="nav-item">
-              <button id="btn-scrape" class="btn btn-primary">
-                Trigger Scraper (Background)
-              </button>
-            </div>
-          </div>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WheelSaver | AI Hub</title>
+    <!-- Modern Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <header class="header">
+        <div class="brand">
+            <span>🛞</span> WheelSaver
         </div>
-      </header>
-      
-      <div class="page-wrapper">
-        <div class="page-body">
-          <div class="container-xl">
-            <!-- Stats Row -->
-            <div class="row row-deck row-cards mb-4" id="stats-container">
-              <div class="col-sm-6 col-lg-3">
-                <div class="card">
-                  <div class="card-body">
-                    <div class="d-flex align-items-center">
-                      <div class="subheader">Total Repos</div>
-                    </div>
-                    <div class="h1 mb-3" id="stat-repos">-</div>
-                  </div>
-                </div>
-              </div>
-              <div class="col-sm-6 col-lg-3">
-                <div class="card">
-                  <div class="card-body">
-                    <div class="d-flex align-items-center">
-                      <div class="subheader">Lenguajes</div>
-                    </div>
-                    <div class="h1 mb-3" id="stat-langs">-</div>
-                  </div>
-                </div>
-              </div>
-              <div class="col-sm-6 col-lg-3">
-                <div class="card">
-                  <div class="card-body">
-                    <div class="d-flex align-items-center">
-                      <div class="subheader">Estrella Max</div>
-                    </div>
-                    <div class="h1 mb-3" id="stat-max">-</div>
-                  </div>
-                </div>
-              </div>
-              <div class="col-sm-6 col-lg-3">
-                <div class="card">
-                  <div class="card-body">
-                    <div class="d-flex align-items-center">
-                      <div class="subheader">Estrella Promedio</div>
-                    </div>
-                    <div class="h1 mb-3" id="stat-avg">-</div>
-                  </div>
-                </div>
-              </div>
-            </div>
+        <button class="btn" id="btn-scrape" data-testid="trigger-scrape-btn">Actualizar DB (Scrape)</button>
+    </header>
 
-            <!-- Search Row -->
-            <div class="card mb-4">
-              <div class="card-body">
-                <h3 class="card-title">🔍 Buscar Repositorios</h3>
-                <form id="search-form" class="row g-3">
-                  <div class="col-md-6">
-                    <input type="text" class="form-control" id="input-q" placeholder="Keywords (ej: fastapi pytest docker)">
-                  </div>
-                  <div class="col-md-3">
-                    <input type="text" class="form-control" id="input-lang" placeholder="Lenguaje (opcional)">
-                  </div>
-                  <div class="col-md-2">
-                    <input type="number" class="form-control" id="input-limit" value="10" min="1" max="100">
-                  </div>
-                  <div class="col-md-1">
-                    <button type="submit" class="btn btn-primary w-100">Buscar</button>
-                  </div>
-                </form>
-              </div>
+    <main>
+        <!-- Statistics -->
+        <section class="stats-grid">
+            <div class="stat-card glass" data-testid="stat-repos-card">
+                <div class="stat-title">Total Repos</div>
+                <div class="stat-value" id="stat-repos">-</div>
             </div>
+            <div class="stat-card glass" data-testid="stat-langs-card">
+                <div class="stat-title">Lenguajes</div>
+                <div class="stat-value" id="stat-langs">-</div>
+            </div>
+            <div class="stat-card glass" data-testid="stat-max-card">
+                <div class="stat-title">Estrella Máxima</div>
+                <div class="stat-value" id="stat-max">-</div>
+            </div>
+            <div class="stat-card glass" data-testid="stat-avg-card">
+                <div class="stat-title">Estrella Promedio</div>
+                <div class="stat-value" id="stat-avg">-</div>
+            </div>
+        </section>
 
-            <!-- Results Table -->
-            <div class="card hide" id="results-card">
-              <div class="card-header">
-                <h3 class="card-title">Resultados</h3>
-              </div>
-              <div class="table-responsive">
-                <table class="table card-table table-vcenter text-nowrap datatable">
-                  <thead>
-                    <tr>
-                      <th>Repo</th>
-                      <th>Estrellas</th>
-                      <th>Lenguaje</th>
-                      <th>Descripción</th>
-                    </tr>
-                  </thead>
-                  <tbody id="results-body">
-                    <!-- JS fills this -->
-                  </tbody>
+        <!-- Search -->
+        <section class="search-section">
+            <form id="search-form" class="search-box glass" data-testid="search-form">
+                <input type="text" id="input-q" placeholder="¿Qué buscas? ej: fastapi, react, auth" data-testid="search-input-q" required>
+                <input type="text" id="input-lang" placeholder="Lenguaje (opcional)" data-testid="search-input-lang">
+                <input type="number" id="input-limit" placeholder="Límite" value="10" min="1" max="100" style="flex: 0.3; min-width: 80px;" data-testid="search-input-limit">
+                <button type="submit" class="btn" data-testid="search-submit-btn">Buscar</button>
+            </form>
+        </section>
+
+        <!-- Results -->
+        <section class="results-section">
+            <div class="table-container glass hide" id="results-card" data-testid="results-container">
+                <table data-testid="results-table">
+                    <thead>
+                        <tr>
+                            <th>Repositorio</th>
+                            <th>Estrellas</th>
+                            <th>Lenguaje</th>
+                            <th>Descripción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-body" data-testid="results-body">
+                        <!-- Filled by JS -->
+                    </tbody>
                 </table>
-              </div>
             </div>
 
-            <div id="loading" class="hide text-center py-4">
-              <div class="spinner-border text-primary" role="status"></div>
+            <!-- Skeleton Loaders -->
+            <div class="table-container glass hide" id="loading-skeleton" data-testid="skeleton-loader">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Repositorio</th>
+                            <th>Estrellas</th>
+                            <th>Lenguaje</th>
+                            <th>Descripción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><div class="skeleton sk-title"></div></td>
+                            <td><div class="skeleton sk-badge"></div></td>
+                            <td><div class="skeleton sk-badge"></div></td>
+                            <td><div class="skeleton sk-text"></div><div class="skeleton sk-text" style="width: 60%"></div></td>
+                        </tr>
+                        <tr>
+                            <td><div class="skeleton sk-title"></div></td>
+                            <td><div class="skeleton sk-badge"></div></td>
+                            <td><div class="skeleton sk-badge"></div></td>
+                            <td><div class="skeleton sk-text"></div><div class="skeleton sk-text" style="width: 40%"></div></td>
+                        </tr>
+                        <tr>
+                            <td><div class="skeleton sk-title"></div></td>
+                            <td><div class="skeleton sk-badge"></div></td>
+                            <td><div class="skeleton sk-badge"></div></td>
+                            <td><div class="skeleton sk-text"></div><div class="skeleton sk-text" style="width: 70%"></div></td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
+        </section>
+    </main>
 
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- Toast Container -->
+    <div id="toast-container" data-testid="toast-container"></div>
+
     <script src="app.js"></script>
-  </body>
+</body>
 </html>

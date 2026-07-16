@@ -13,10 +13,30 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 });
 
+// Toast System
+function showToast(message, type = "success") {
+    const container = document.getElementById("toast-container");
+    const toast = document.createElement("div");
+    toast.className = `toast ${type}`;
+    
+    const icon = type === "success" ? "✅" : "❌";
+    toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+    
+    container.appendChild(toast);
+    
+    // Auto remove after 4 seconds
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        toast.style.transition = 'all 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
 async function loadStats() {
     try {
         const res = await fetch(`${API_BASE}/stats`);
-        if (!res.ok) throw new Error("API Error");
+        if (!res.ok) throw new Error("API devuelta error: " + res.status);
         const stats = await res.json();
         
         document.getElementById("stat-repos").textContent = stats.total_repos.toLocaleString();
@@ -24,7 +44,8 @@ async function loadStats() {
         document.getElementById("stat-max").textContent = stats.stars_max.toLocaleString();
         document.getElementById("stat-avg").textContent = Math.round(stats.stars_avg).toLocaleString();
     } catch (err) {
-        console.error("No se pudo cargar estadisticas", err);
+        showToast("Error al cargar estadísticas: " + err.message, "error");
+        console.error("Stats Error:", err);
     }
 }
 
@@ -36,11 +57,12 @@ async function performSearch() {
     if (!q) return;
 
     const resultsCard = document.getElementById("results-card");
-    const loading = document.getElementById("loading");
+    const skeletonLoader = document.getElementById("loading-skeleton");
     const tbody = document.getElementById("results-body");
 
+    // UI States
     resultsCard.classList.add("hide");
-    loading.classList.remove("hide");
+    skeletonLoader.classList.remove("hide");
     tbody.innerHTML = "";
 
     try {
@@ -48,24 +70,36 @@ async function performSearch() {
         if (lang) url += `&language=${encodeURIComponent(lang)}`;
 
         const res = await fetch(url);
-        if (!res.ok) throw new Error("API Error");
+        if (!res.ok) throw new Error("Error en servidor");
         const data = await res.json();
 
-        data.repos.forEach(repo => {
+        if (data.repos.length === 0) {
+            showToast("No se encontraron resultados para tu búsqueda.", "error");
+            skeletonLoader.classList.add("hide");
+            return;
+        }
+
+        data.repos.forEach((repo, idx) => {
             const tr = document.createElement("tr");
+            tr.setAttribute("data-testid", `result-row-${idx}`);
             
+            // Name & URL
             const tdName = document.createElement("td");
-            tdName.innerHTML = `<a href="${repo.url}" target="_blank"><strong>${repo.owner}/${repo.name}</strong></a>`;
+            tdName.innerHTML = `<a href="${repo.url}" target="_blank" data-testid="repo-link-${idx}">${repo.owner}/${repo.name}</a>`;
             
+            // Stars
             const tdStars = document.createElement("td");
-            tdStars.textContent = "⭐ " + repo.stars.toLocaleString();
+            tdStars.innerHTML = `<span style="color: #fbbf24; font-weight: 600;">⭐ ${repo.stars.toLocaleString()}</span>`;
             
+            // Language
             const tdLang = document.createElement("td");
-            tdLang.textContent = repo.language || "-";
+            tdLang.innerHTML = repo.language ? `<span class="badge">${repo.language}</span>` : "-";
             
+            // Description
             const tdDesc = document.createElement("td");
-            tdDesc.className = "text-wrap";
-            tdDesc.textContent = repo.description || "-";
+            tdDesc.textContent = repo.description || "Sin descripción";
+            tdDesc.style.color = "var(--text-muted)";
+            tdDesc.style.lineHeight = "1.5";
 
             tr.appendChild(tdName);
             tr.appendChild(tdStars);
@@ -74,21 +108,23 @@ async function performSearch() {
             tbody.appendChild(tr);
         });
 
+        skeletonLoader.classList.add("hide");
         resultsCard.classList.remove("hide");
+        
     } catch (err) {
-        alert("Error al buscar: " + err.message);
-    } finally {
-        loading.classList.add("hide");
+        skeletonLoader.classList.add("hide");
+        showToast("Error al buscar: " + err.message, "error");
     }
 }
 
 async function triggerScrape() {
     try {
+        showToast("Iniciando scraper en background...", "success");
         const res = await fetch(`${API_BASE}/scrape?min_stars=500`, { method: "POST" });
-        if (!res.ok) throw new Error("Error en API");
+        if (!res.ok) throw new Error("La API no pudo iniciar el scraper");
         const data = await res.json();
-        alert("Scraping iniciado en background: " + data.message);
+        showToast(data.message, "success");
     } catch(err) {
-        alert("Error: " + err.message);
+        showToast(err.message, "error");
     }
 }
