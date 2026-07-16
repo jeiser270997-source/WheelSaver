@@ -264,8 +264,17 @@ def ready(
             else:
                 console.print(f"[dim]{label}: No se encontraron recomendaciones en la BD[/dim]")
 
-    console.print("\n[bold green]✅ Ready check completado[/bold green]")
-    console.print("[dim]TIP: Corre 'python cli.py search <keyword>' para explorar mas[/dim]")
+    console.print("\n[bold blue]🤖 Ejecutando Auditoría Profunda con IA...[/bold blue]")
+    import asyncio
+    from api.llm import audit_project_with_ai
+    
+    with console.status("[bold green]Analizando arquitectura...[/bold green]"):
+        report = asyncio.run(audit_project_with_ai(audit_data, missing_categories))
+        
+    console.print(Panel(report, title="[bold magenta]WheelSaver Deep Audit[/bold magenta]", border_style="cyan"))
+    
+    if missing_categories:
+        console.print("\n[dim]TIP: Corre 'python cli.py search <keyword>' para explorar mas librerias que cubran estos huecos.[/dim]")
 
 
 @app.command()

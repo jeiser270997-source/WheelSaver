@@ -264,7 +264,13 @@ _NATIVE_HANDLERS = {
 
 
 from async_lru import alru_cache
+from tenacity import retry, stop_after_attempt, wait_exponential
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=5, max=30),
+    reraise=True
+)
 @alru_cache(maxsize=128, ttl=3600)
 async def ask_llm(system_prompt: str = "", user_prompt: str = "", **kwargs) -> str:
     """
@@ -405,3 +411,35 @@ REGLAS DEL SKILL.MD:
         return resp
     except Exception as e:
         return f"---\nname: Skill Error\ndescription: Falló la generacion\n---\nError: {e}"
+
+
+async def audit_project_with_ai(audit_data: dict, missing_categories: list) -> str:
+    """
+    Realiza una auditoría profunda de la arquitectura y el estado del proyecto local.
+    Si todo esta perfecto (missing_categories está vacío), devuelve el badge oficial.
+    """
+    if not missing_categories:
+        return "✅ **APROBADO POR WHEELSAVER**\n\nTu proyecto cumple con todos los estándares, está blindado y sin deuda técnica. ¡Puedes cerrar el proyecto o lanzarlo a producción con total confianza!"
+        
+    sys_prompt = (
+        "Eres un arquitecto de software experto (WheelSaver AI Auditor). "
+        "Se te pasará el análisis de un proyecto de código. Debes dar un diagnóstico breve "
+        "y brutalmente honesto, indicando por qué les faltan ciertas cosas y cómo arreglarlo rápido."
+    )
+    
+    missing_str = "\n".join([f"- {label} (Categoria: {cat})" for label, cat, _ in missing_categories])
+    
+    user_prompt = f"""
+He auditado este proyecto localmente.
+Stack: {audit_data['stack_str']}
+Framework: {audit_data['framework']}
+
+Faltan los siguientes componentes críticos:
+{missing_str}
+
+Dame un informe de Auditoría Profunda indicando el impacto de no tener esto y un consejo directo.
+"""
+    try:
+        return await ask_llm(system_prompt=sys_prompt, user_prompt=user_prompt, temperature=0.3)
+    except Exception as e:
+        return f"Error en la auditoría AI: {e}"
