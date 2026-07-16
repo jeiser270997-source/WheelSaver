@@ -6,8 +6,20 @@ import sqlite3
 import httpx
 from loguru import logger
 
-DB_PATH = os.path.join(os.path.expanduser("~"), ".wheelsaver", "top_repos.db")
+def get_db_path() -> str:
+    # 1. Variable de entorno
+    if "WHEELSAVER_DB_PATH" in os.environ:
+        return os.environ["WHEELSAVER_DB_PATH"]
+    
+    # 2. Proyecto local (desarrollo)
+    local_db = os.path.join(os.getcwd(), "data", "top_repos.db")
+    if os.path.exists(local_db):
+        return local_db
+        
+    # 3. Instalación global (fallback)
+    return os.path.join(os.path.expanduser("~"), ".wheelsaver", "top_repos.db")
 
+DB_PATH = get_db_path()
 
 def make_repo_id(owner, name):
     """

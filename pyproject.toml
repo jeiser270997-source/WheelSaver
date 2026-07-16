@@ -48,5 +48,5 @@ select = ["E", "F", "I"]
 ignore = ["E402", "E741", "F841"]
 
 [tool.setuptools]
-packages = ["api", "scraper", "services"]
+packages = ["api", "scraper", "services", "scripts"]
 py-modules = ["cli"]
