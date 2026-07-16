@@ -46,3 +46,7 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 ignore = []
+
+[tool.setuptools]
+packages = ["api", "scraper", "services"]
+py-modules = ["cli"]
