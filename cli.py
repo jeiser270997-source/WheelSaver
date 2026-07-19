@@ -370,7 +370,7 @@ def skillify(
     with console.status("[bold green]Generando SKILL.md con IA (RAG)...[/bold green]"):
         skill_content = asyncio.run(generate_skill_from_repo(repo, description, readme))
         
-    # 3. Guardar en C:\Users\dev\.gemini\config\skills\[repo_name]\SKILL.md
+    # 3. Guardar en ~/.gemini/config/skills/[repo_name]/SKILL.md
     repo_name = repo.split("/")[-1].lower()
     skills_dir = os.path.expanduser("~/.gemini/config/skills")
     target_dir = os.path.join(skills_dir, repo_name)

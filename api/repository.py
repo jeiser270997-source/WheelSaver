@@ -3,7 +3,6 @@ import os
 
 import aiosqlite
 import httpx
-from async_lru import alru_cache
 
 
 async def search_repos_async(db: aiosqlite.Connection, keyword: str, limit: int = 5):
@@ -101,7 +100,6 @@ async def search_repos_multi_keywords_async(
         return []
 
 
-@alru_cache(maxsize=32)
 async def get_stats_async(db: aiosqlite.Connection):
     stats = {}
     cursor = await db.execute("SELECT COUNT(*) as count FROM repos")
@@ -141,7 +139,6 @@ async def get_repo_async(db: aiosqlite.Connection, owner: str, name: str):
     return dict(row) if row else None
 
 
-@alru_cache(maxsize=32)
 async def get_languages_async(db: aiosqlite.Connection, min_repos: int, limit: int):
     cursor = await db.execute(
         """SELECT language, COUNT(*) as count FROM repos

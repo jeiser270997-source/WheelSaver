@@ -36,17 +36,30 @@ def is_active_repo(updated_at_str, stars):
         return False
 
 
-def log_run_start():
-    """Registra el inicio de una ejecución en run_history y devuelve el run_id."""
+def log_run_start(run_id=None):
+    """
+    Registra el inicio de una ejecución en run_history y devuelve el run_id.
+
+    Si se pasa un run_id (creado externamente por el API handler), solo actualiza
+    repos_before en esa fila. Si no, crea una fila nueva (modo CLI).
+    """
     conn = init_db()
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM repos")
     repos_before = c.fetchone()[0]
-    c.execute(
-        "INSERT INTO run_history (started_at, repos_before, status) VALUES (?, ?, 'running')",
-        (datetime.now(timezone.utc).isoformat(), repos_before),
-    )
-    run_id = c.lastrowid
+
+    if run_id is None:
+        c.execute(
+            "INSERT INTO run_history (started_at, repos_before, status) VALUES (?, ?, 'running')",
+            (datetime.now(timezone.utc).isoformat(), repos_before),
+        )
+        run_id = c.lastrowid
+    else:
+        c.execute(
+            "UPDATE run_history SET repos_before = ? WHERE id = ?",
+            (repos_before, run_id),
+        )
+
     conn.commit()
     conn.close()
     return run_id, repos_before
@@ -77,13 +90,18 @@ def log_run_finish(run_id, repos_inserted, repos_filtered, min_stars, status="co
     conn.close()
 
 
-def fetch_top_repos(min_stars=500):
+def fetch_top_repos(min_stars=500, run_id=None):
     """
     Escanea GitHub desde el Top 1 (repos con más estrellas) hacia abajo
     hasta alcanzar el umbral minimo de estrellas.
 
     En producción SIEMPRE empieza desde arriba para refrescar la data
     de los repos existentes (upsert), no solo agregar nuevos.
+
+    Args:
+        min_stars: Umbral mínimo de estrellas.
+        run_id: ID opcional de run_history (creado por el API handler para lock atómico).
+                Si es None, se crea una fila nueva (modo CLI).
     """
     if not GITHUB_TOKEN:
         print("❌ Error: GITHUB_TOKEN no encontrado en .env")
@@ -113,7 +131,7 @@ def fetch_top_repos(min_stars=500):
     }
     """
 
-    run_id, repos_before = log_run_start()
+    run_id, repos_before = log_run_start(run_id=run_id)
     logger.info(
         "Iniciando escaneo desde Top 1 hasta {} estrellas (repos actuales: {})",
         min_stars,

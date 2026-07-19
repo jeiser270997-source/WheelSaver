@@ -173,10 +173,10 @@ def main():
             todos.extend(repos)
             time.sleep(0.3)
 
-    # Deduplicar
+    # Deduplicar usando owner/name (no solo name) para evitar colisiones
     unicos = {}
     for r in todos:
-        key = r["name"].lower()
+        key = f"{r['owner'].lower()}/{r['name'].lower()}"
         if key not in unicos or len(r["description"]) > len(unicos[key]["description"]):
             unicos[key] = r
 

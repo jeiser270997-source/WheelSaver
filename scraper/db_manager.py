@@ -255,7 +255,7 @@ def search_repos_multi_keywords(keywords, limit=20, conn=None):
         cursor = conn.cursor()
 
         try:
-            fts_query = " OR ".join(keywords)
+            fts_query = " OR ".join(f'"{kw}"' for kw in keywords)
             cursor.execute(
                 """
                 SELECT DISTINCT r.name, r.owner, r.description, r.url, r.stars, r.language, r.topics
@@ -267,8 +267,10 @@ def search_repos_multi_keywords(keywords, limit=20, conn=None):
             """,
                 (fts_query, limit),
             )
+            used_fallback = False
         except sqlite3.OperationalError:
             # Fallback: LIKE queries
+            used_fallback = True
             seen = set()
             cursor.execute(
                 "SELECT name, owner, description, url, stars, language, topics FROM repos ORDER BY stars DESC"
@@ -284,7 +286,7 @@ def search_repos_multi_keywords(keywords, limit=20, conn=None):
                         if len(results) >= limit:
                             break
 
-        results = cursor.fetchall() if "results" not in dir() else results
+        results = cursor.fetchall() if not used_fallback else results
     finally:
         if owns_conn:
             conn.close()

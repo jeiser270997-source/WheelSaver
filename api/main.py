@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.database import get_db
+from api.database import DB_PATH, get_db
 from api.repository import (
     get_languages_async,
     get_repo_async,
@@ -44,7 +44,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -148,15 +148,85 @@ async def top(
 
 
 @app.post("/scrape")
+@limiter.limit("1/hour")
 async def trigger_scrape(
+    request: Request,
     background_tasks: BackgroundTasks,
     min_stars: int = Query(500, ge=10, description="Estrellas minimas para buscar"),
 ):
-    """Lanza el scraper de GitHub de forma asíncrona en el mismo proceso."""
+    """
+    Lanza el scraper de GitHub de forma asíncrona en el mismo proceso.
+    Limitado a 1 vez por hora por IP.
+
+    Lock atómico vía INSERT ... WHERE NOT EXISTS:
+    - Una sola sentencia SQL combina verificación + adquisición del lock
+    - Si un lock previo lleva +6h, se auto-recupera (marca como 'failed')
+    """
+    from datetime import datetime, timezone
     from scraper.github_fetcher import fetch_top_repos
 
-    background_tasks.add_task(fetch_top_repos, min_stars)
-    return {"status": "ok", "message": f"Scraper iniciado (min_stars={min_stars})"}
+    STALE_TIMEOUT_HOURS = 6
+
+    try:
+        db = await aiosqlite.connect(DB_PATH)
+    except Exception:
+        # La BD aun no existe (fresh install) — continuar sin lock
+        background_tasks.add_task(fetch_top_repos, min_stars)
+        return {"status": "ok", "message": f"Scraper iniciado (min_stars={min_stars})"}
+
+    db.row_factory = aiosqlite.Row
+
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+
+        # 1. Auto-recuperar locks stale (> 6h)
+        cursor = await db.execute(
+            "SELECT id, started_at FROM run_history WHERE status = 'running'"
+        )
+        rows = await cursor.fetchall()
+        for row in rows:
+            started_at = datetime.fromisoformat(row["started_at"].replace("Z", "+00:00"))
+            if (datetime.now(timezone.utc) - started_at).total_seconds() / 3600 >= STALE_TIMEOUT_HOURS:
+                await db.execute(
+                    "UPDATE run_history SET status = 'failed', finished_at = ? WHERE id = ? AND status = 'running'",
+                    (now, row["id"]),
+                )
+
+        # 2. Lock atómico: una sola sentencia combina verificación + inserción
+        #    Si ya existe una fila con status='running', el INSERT no inserta nada
+        cursor = await db.execute(
+            """
+            INSERT INTO run_history (started_at, status)
+            SELECT ?, 'running'
+            WHERE NOT EXISTS (SELECT 1 FROM run_history WHERE status = 'running')
+            """,
+            (now,),
+        )
+
+        if cursor.rowcount == 0:
+            # El lock no se adquirió — alguien más ya tiene uno corriendo
+            await db.close()
+            raise HTTPException(
+                status_code=409,
+                detail=f"Ya hay un scraper en ejecucion. "
+                       f"Espera a que termine o {STALE_TIMEOUT_HOURS}h para auto-recuperacion.",
+            )
+
+        new_run_id = cursor.lastrowid
+        await db.commit()
+    except aiosqlite.OperationalError:
+        # Tabla run_history aun no existe (primera ejecucion) — continuar sin lock
+        new_run_id = None
+        await db.commit()
+    finally:
+        await db.close()
+
+    # 3. Programar background task con el run_id (None si fresh install)
+    background_tasks.add_task(fetch_top_repos, min_stars, new_run_id)
+    return {
+        "status": "ok",
+        "message": f"Scraper iniciado (run_id={new_run_id}, min_stars={min_stars})",
+    }
 
 
 from pydantic import BaseModel
