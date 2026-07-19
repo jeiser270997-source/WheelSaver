@@ -267,9 +267,15 @@ def ready(
     console.print("\n[bold blue]🤖 Ejecutando Auditoría Profunda con IA...[/bold blue]")
     import asyncio
     from api.llm import audit_project_with_ai
-    
-    with console.status("[bold green]Analizando arquitectura...[/bold green]"):
-        report = asyncio.run(audit_project_with_ai(audit_data, missing_categories))
+
+    with console.status("[bold green]Analizando arquitectura + código estático...[/bold green]"):
+        report = asyncio.run(
+            audit_project_with_ai(
+                audit_data,
+                missing_categories,
+                static_analysis=audit_data.get("static_analysis"),
+            )
+        )
         
     console.print(Panel(report, title="[bold magenta]WheelSaver Deep Audit[/bold magenta]", border_style="cyan"))
     
@@ -326,6 +332,106 @@ def swap(
     console.print(
         f"\n[dim]Mas resultados con: python cli.py search {' '.join(keywords)} --limit 20[/dim]"
     )
+
+
+@app.command(name="audit-code")
+def audit_code(
+    path: str = typer.Argument(
+        ".", help="Ruta al proyecto Python a analizar (por defecto: directorio actual)"
+    ),
+):
+    """Analiza seguridad, codigo muerto y complejidad (bandit + vulture + radon)."""
+    from pathlib import Path
+
+    from services.static_analyzer import analyze_python_project
+
+    target = Path(path).resolve()
+    if not target.exists():
+        console.print(f"[bold red]Error: la ruta no existe: {target}[/bold red]")
+        raise typer.Exit(1)
+
+    console.print(f"[bold blue]Analizando codigo en:[/bold blue] {target}\n")
+
+    with console.status("[bold green]Ejecutando bandit, vulture y radon...[/bold green]"):
+        report = analyze_python_project(target)
+
+    # Seguridad (bandit)
+    security = report.get("security", {})
+    if not security.get("available"):
+        console.print(
+            f"[yellow]Seguridad (bandit): no disponible — "
+            f"{security.get('error', 'desconocido')}[/yellow]"
+        )
+    else:
+        sev = security.get("by_severity", {})
+        panel = Panel(
+            f"[bold]Total hallazgos:[/bold] {security.get('total_findings', 0)}\n"
+            f"[red]HIGH:[/red] {sev.get('HIGH', 0)}  "
+            f"[yellow]MEDIUM:[/yellow] {sev.get('MEDIUM', 0)}  "
+            f"[dim]LOW:[/dim] {sev.get('LOW', 0)}",
+            title="Seguridad (bandit)",
+            border_style="red",
+        )
+        console.print(panel)
+
+        findings = security.get("top_findings", [])
+        if findings:
+            table = Table(title="Top hallazgos de seguridad")
+            table.add_column("Archivo", style="cyan")
+            table.add_column("Linea", justify="right")
+            table.add_column("Severidad")
+            table.add_column("Problema")
+            for f in findings:
+                table.add_row(
+                    clean(f.get("file", ""), 40),
+                    str(f.get("line", "")),
+                    f.get("severity", ""),
+                    clean(f.get("issue", ""), 70),
+                )
+            console.print(table)
+
+    # Codigo muerto (vulture)
+    dead_code = report.get("dead_code", {})
+    if not dead_code.get("available"):
+        console.print(
+            f"[yellow]Codigo muerto (vulture): no disponible — "
+            f"{dead_code.get('error', 'desconocido')}[/yellow]"
+        )
+    else:
+        console.print(
+            f"\n[bold]Codigo muerto (vulture):[/bold] "
+            f"{dead_code.get('total_findings', 0)} hallazgos"
+        )
+        for line in dead_code.get("top_findings", []):
+            console.print(f"  [dim]{clean(line, 100)}[/dim]")
+
+    # Complejidad (radon)
+    complexity = report.get("complexity", {})
+    if not complexity.get("available"):
+        console.print(
+            f"[yellow]Complejidad (radon): no disponible — "
+            f"{complexity.get('error', 'desconocido')}[/yellow]"
+        )
+    else:
+        console.print(
+            f"\n[bold]Alta complejidad (radon):[/bold] "
+            f"{complexity.get('high_complexity_count', 0)} funciones con rango D/E/F"
+        )
+        findings = complexity.get("top_findings", [])
+        if findings:
+            table = Table(title="Funciones mas complejas")
+            table.add_column("Archivo", style="cyan")
+            table.add_column("Funcion")
+            table.add_column("Complejidad", justify="right")
+            table.add_column("Rango")
+            for f in findings:
+                table.add_row(
+                    clean(f.get("file", ""), 40),
+                    clean(f.get("name", ""), 30),
+                    str(f.get("complexity", "")),
+                    f.get("rank", ""),
+                )
+            console.print(table)
 
 
 @app.command()

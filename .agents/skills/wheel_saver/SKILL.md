@@ -183,6 +183,12 @@ con el siguiente formato:
 8. [ ] Priorizar por puntuacion de matriz
 9. [ ] Generar reporte con secciones Quick Wins, Arquitectura, Deuda Tecnica
 
+### Analisis estatico de codigo:
+El comando `wheelsaver audit-code <ruta>` ejecuta bandit (seguridad), vulture (codigo muerto)
+y radon (complejidad ciclomatica) sobre un proyecto Python. Los resultados se integran
+automaticamente en el reporte de auditoria profunda (`wheelsaver ready`) cuando se
+detecta un proyecto Python.
+
 ### Sugerencias de reemplazo:
 Si el proyecto usa alguna dependencia que tiene una alternativa mas popular
 o mejor mantenida en la BD, sugierela explicitamente:

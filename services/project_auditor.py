@@ -59,6 +59,16 @@ def detect_stack_and_framework(target: Path) -> dict:
     if has_go:
         stacks.append("Go")
 
+    # Static analysis (solo si es Python — silencioso si falla)
+    static_analysis = None
+    if has_python:
+        try:
+            from services.static_analyzer import analyze_python_project
+
+            static_analysis = analyze_python_project(target)
+        except ImportError:
+            pass
+
     return {
         "stack_str": " + ".join(stacks) if stacks else "No detectado",
         "framework": framework,
@@ -71,4 +81,5 @@ def detect_stack_and_framework(target: Path) -> dict:
             ("📋 .gitignore", has_gitignore, "git", "gitignore template"),
             ("🔧 Git", has_git, "git", "git version-control"),
         ],
+        "static_analysis": static_analysis,
     }

@@ -17,9 +17,11 @@ librerias existentes, evitando que codees desde cero lo que ya esta resuelto.
 |---|---|
 | **3 Scrapers** | GitHub GraphQL API + EvanLi/Github-Ranking + gitstar-ranking.com |
 | **Base de datos** | SQLite + FTS5, actualizacion semanal via GitHub Actions |
-| **CLI unificado** | 11 comandos con Typer + Rich (tablas, colores, autocompletado) |
+| **CLI unificado** | 12 comandos con Typer + Rich (tablas, colores, autocompletado) |
 | **API REST** | FastAPI con 9+ endpoints + Swagger en `/docs` |
 | **3 Skills IA** | `wheel_saver` `wheel-ready` `wheel-swap` para Claude Code |
+| **Análisis estático** | `wheelsaver audit-code` ejecuta bandit + vulture + radon |
+| **CI/CD** | GitHub Actions: lint + test multi-versión + coverage + actualización semanal de BD |
 | **Docker** | Dockerfile para despliegue en contenedor |
 
 ## Inicio rapido
@@ -70,7 +72,8 @@ WheelSaver/
 │   ├── import_from_evanli.py # Importador EvanLi
 │   └── scrape_gitstar_ranking.py  # Scraper gitstar-ranking
 ├── services/
-│   └── project_auditor.py    # Detector de stack del proyecto
+│   ├── project_auditor.py    # Detector de stack del proyecto
+│   └── static_analyzer.py    # Análisis estático (bandit + vulture + radon)
 ├── .agents/skills/
 │   ├── wheel_saver/          # Skill: auditoria completa
 │   ├── wheel-ready/          # Skill: checklist de proyecto
@@ -91,7 +94,8 @@ wheelsaver import evanli       # Importar EvanLi
 wheelsaver import gitstar      # Importar gitstar-ranking
 wheelsaver api                 # Lanzar API REST
 wheelsaver docker              # Levantar en Docker
-wheelsaver ready               # Checklist del proyecto
+wheelsaver ready               # Checklist + análisis estático del proyecto
+wheelsaver audit-code <ruta>   # Seguridad, código muerto y complejidad
 wheelsaver swap <feature>      # Buscar alternativas
 wheelsaver skillify <repo>     # Convertir repo en skill de IA
 wheelsaver ask <pregunta>      # Consultar a la IA con RAG

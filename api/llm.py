@@ -413,31 +413,72 @@ REGLAS DEL SKILL.MD:
         return f"---\nname: Skill Error\ndescription: Falló la generacion\n---\nError: {e}"
 
 
-async def audit_project_with_ai(audit_data: dict, missing_categories: list) -> str:
+async def audit_project_with_ai(audit_data: dict, missing_categories: list, static_analysis: dict = None) -> str:
     """
     Realiza una auditoría profunda de la arquitectura y el estado del proyecto local.
     Si todo esta perfecto (missing_categories está vacío), devuelve el badge oficial.
+
+    Args:
+        audit_data: Dict con stack, framework, checks (de detect_stack_and_framework).
+        missing_categories: Lista de tuplas (label, cat, keywords) con lo que falta.
+        static_analysis: Dict opcional con resultados de static_analyzer (bandit/vulture/radon).
     """
-    if not missing_categories:
+    if not missing_categories and not static_analysis:
         return "✅ **APROBADO POR WHEELSAVER**\n\nTu proyecto cumple con todos los estándares, está blindado y sin deuda técnica. ¡Puedes cerrar el proyecto o lanzarlo a producción con total confianza!"
-        
+
     sys_prompt = (
         "Eres un arquitecto de software experto (WheelSaver AI Auditor). "
         "Se te pasará el análisis de un proyecto de código. Debes dar un diagnóstico breve "
-        "y brutalmente honesto, indicando por qué les faltan ciertas cosas y cómo arreglarlo rápido."
+        "y brutalmente honesto, indicando por qué les faltan ciertas cosas, qué problemas "
+        "de seguridad o calidad de código existen, y cómo arreglarlo rápido."
     )
-    
-    missing_str = "\n".join([f"- {label} (Categoria: {cat})" for label, cat, _ in missing_categories])
-    
-    user_prompt = f"""
-He auditado este proyecto localmente.
+
+    missing_str = ""
+    if missing_categories:
+        missing_str = "\n".join([f"- {label} (Categoria: {cat})" for label, cat, _ in missing_categories])
+
+    # Construir sección de análisis estático si está disponible
+    static_str = ""
+    if static_analysis:
+        sec = static_analysis.get("security", {})
+        dc = static_analysis.get("dead_code", {})
+        cx = static_analysis.get("complexity", {})
+
+        static_parts = []
+        if sec.get("available"):
+            sev = sec.get("by_severity", {})
+            total = sec.get("total_findings", 0)
+            static_parts.append(
+                f"--- Seguridad (bandit) ---\n"
+                f"Hallazgos totales: {total}\n"
+                f"HIGH: {sev.get('HIGH', 0)} | MEDIUM: {sev.get('MEDIUM', 0)} | LOW: {sev.get('LOW', 0)}"
+            )
+            top = sec.get("top_findings", [])
+            if top:
+                static_parts.append("Top hallazgos:")
+                for f in top:
+                    static_parts.append(f"  - {f.get('file','')}:{f.get('line','')} [{f.get('severity','')}] {f.get('issue','')[:100]}")
+
+        if dc.get("available"):
+            total = dc.get("total_findings", 0)
+            static_parts.append(f"--- Código Muerto (vulture) ---\nHallazgos: {total}")
+
+        if cx.get("available"):
+            total = cx.get("high_complexity_count", 0)
+            static_parts.append(f"--- Complejidad Ciclomática (radon) ---\nFunciones con rango D/E/F: {total}")
+
+        if static_parts:
+            static_str = "\n\n## Resultados de Análisis Estático\n\n" + "\n\n".join(static_parts)
+
+    user_prompt = f"""He auditado este proyecto localmente.
 Stack: {audit_data['stack_str']}
 Framework: {audit_data['framework']}
 
 Faltan los siguientes componentes críticos:
-{missing_str}
+{missing_str if missing_str else '(Ninguno — todos los checks básicos están cubiertos)'}
+{static_str}
 
-Dame un informe de Auditoría Profunda indicando el impacto de no tener esto y un consejo directo.
+Dame un informe de Auditoría Profunda indicando el impacto de los hallazgos y un consejo directo.
 """
     try:
         return await ask_llm(system_prompt=sys_prompt, user_prompt=user_prompt, temperature=0.3)
