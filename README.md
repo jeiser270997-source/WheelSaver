@@ -16,13 +16,14 @@ librerias existentes, evitando que codees desde cero lo que ya esta resuelto.
 | Componente | Qué hace |
 |---|---|
 | **3 Scrapers** | GitHub GraphQL API + EvanLi/Github-Ranking + gitstar-ranking.com |
-| **Base de datos** | SQLite + FTS5, actualización local programada o vía GitHub Actions |
+| **Base de datos** | SQLite + FTS5, actualización local programada a la 1:00 AM |
 | **CLI unificado** | 12 comandos con Typer + Rich (tablas, colores, autocompletado UTF-8) |
 | **API REST** | FastAPI con 9+ endpoints + Swagger en `/docs` |
 | **3 Skills IA** | `wheel_saver` `wheel-ready` `wheel-swap` para Claude Code / Gemini / Antigravity |
 | **Análisis estático** | `wheelsaver audit-code` ejecuta bandit + vulture + radon |
-| **CI/CD** | GitHub Actions: lint + test multi-versión + coverage + actualización de BD |
+| **Ejecución Local** | 100% autónomo local (sin dependencias en la nube ni CI externos) |
 | **Docker** | Dockerfile para despliegue en contenedor |
+
 
 ## Inicio rápido
 
