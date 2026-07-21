@@ -1,5 +1,5 @@
 import pytest
-import multiprocessing
+import threading
 import uvicorn
 import time
 import httpx
@@ -7,30 +7,38 @@ from playwright.sync_api import Page
 
 from api.main import app
 
-def run_server():
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="error")
+class ServerThread(threading.Thread):
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=8008, log_level="error"))
+
+    def run(self):
+        self.server.run()
+
+    def stop(self):
+        self.server.should_exit = True
 
 @pytest.fixture(scope="session", autouse=True)
 def start_server():
-    proc = multiprocessing.Process(target=run_server, daemon=True)
-    proc.start()
+    server = ServerThread()
+    server.start()
     
     # Wait for the server to be healthy
     for _ in range(30):
         try:
-            resp = httpx.get("http://127.0.0.1:8000/")
+            resp = httpx.get("http://127.0.0.1:8008/health")
             if resp.status_code == 200:
                 break
         except Exception:
             pass
-        time.sleep(0.5)
+        time.sleep(0.2)
         
     yield
-    proc.terminate()
+    server.stop()
 
 def test_homepage_loads(page: Page):
     """Prueba que el frontend cargue y muestre WheelSaver."""
-    page.goto("http://127.0.0.1:8000/")
+    page.goto("http://127.0.0.1:8008/web/index.html")
     
     # Verificar titulo de la pagina
     assert "WheelSaver" in page.title()
@@ -41,7 +49,7 @@ def test_homepage_loads(page: Page):
 
 def test_search_ui_interaction(page: Page):
     """Prueba una interaccion basica en el frontend."""
-    page.goto("http://127.0.0.1:8000/")
+    page.goto("http://127.0.0.1:8008/web/index.html")
     
     search_input = page.locator("input#input-q")
     search_input.fill("test")
@@ -50,6 +58,6 @@ def test_search_ui_interaction(page: Page):
     search_input.press("Enter")
     
     # Esperar a que cambie el DOM
-    page.wait_for_selector("#results-card")
+    page.wait_for_selector("#results-card", timeout=5000)
     results = page.locator("#results-card").inner_text()
     assert results is not None

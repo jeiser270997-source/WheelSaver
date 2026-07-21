@@ -7,22 +7,26 @@ Project-URL: Homepage, https://github.com/JeisarGtz/Top_Repos
 Keywords: github,scraper,ai,audit,cli
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
-Requires-Dist: httpx
-Requires-Dist: typer
-Requires-Dist: rich
-Requires-Dist: tqdm
-Requires-Dist: fastapi
-Requires-Dist: uvicorn[standard]
-Requires-Dist: python-dotenv
-Requires-Dist: loguru
-Requires-Dist: openai
-Requires-Dist: aiosqlite
-Requires-Dist: async-lru
-Requires-Dist: beautifulsoup4
+Requires-Dist: httpx>=0.27.0
+Requires-Dist: typer>=0.9.0
+Requires-Dist: rich>=13.0.0
+Requires-Dist: tqdm>=4.66.0
+Requires-Dist: fastapi>=0.109.0
+Requires-Dist: uvicorn[standard]>=0.27.0
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: loguru>=0.7.0
+Requires-Dist: openai>=1.0.0
+Requires-Dist: aiosqlite>=0.19.0
+Requires-Dist: async-lru>=2.0.0
+Requires-Dist: beautifulsoup4>=4.12.0
+Requires-Dist: slowapi>=0.1.9
+Requires-Dist: tenacity>=8.2.0
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
 Requires-Dist: pytest-asyncio; extra == "dev"
 Requires-Dist: pytest-cov; extra == "dev"
+Requires-Dist: pytest-playwright; extra == "dev"
+Requires-Dist: black; extra == "dev"
 Requires-Dist: ruff; extra == "dev"
 
 # 🛞 WheelSaver
@@ -44,17 +48,16 @@ librerias existentes, evitando que codees desde cero lo que ya esta resuelto.
 |---|---|
 | **3 Scrapers** | GitHub GraphQL API + EvanLi/Github-Ranking + gitstar-ranking.com |
 | **Base de datos** | SQLite + FTS5, actualizacion semanal via GitHub Actions |
-| **CLI unificado** | 9 comandos con Typer + Rich (tablas, colores, autocompletado) |
-| **API REST** | FastAPI con 6 endpoints + Swagger en `/docs` |
-| **Dashboard** | Streamlit interactivo con graficos y busqueda |
-| **3 Skills IA** | `wheel-audit` `wheel-ready` `wheel-swap` para Claude Code |
-| **Docker** | Dockerfile + compose, despliegue en 1 comando |
+| **CLI unificado** | 11 comandos con Typer + Rich (tablas, colores, autocompletado) |
+| **API REST** | FastAPI con 9+ endpoints + Swagger en `/docs` |
+| **3 Skills IA** | `wheel_saver` `wheel-ready` `wheel-swap` para Claude Code |
+| **Docker** | Dockerfile para despliegue en contenedor |
 
 ## Inicio rapido
 
 ```bash
 # 1. Instalar dependencias
-pip install -r requirements.txt
+pip install -e .
 
 # 2. Configurar token de GitHub (para el scraper)
 echo "GITHUB_TOKEN=ghp_tu_token_aqui" > .env
@@ -67,12 +70,6 @@ wheelsaver ready                          # Checklist del proyecto
 
 # 3b. Lanzar API REST
 wheelsaver api                            # → http://localhost:8000/docs
-
-# 3c. Lanzar Dashboard
-wheelsaver dashboard                      # → http://localhost:8501
-
-# 3d. Modo Docker
-docker compose up --build -d                 # → http://localhost:8000
 ```
 
 ## Skills para Claude Code
@@ -80,7 +77,7 @@ docker compose up --build -d                 # → http://localhost:8000
 Instala las rueditas de entrenamiento en cualquier proyecto:
 
 ```powershell
-& "E:\PROYECTOS\Mis_Proyectos\TOP_REPOS\Instalar-WheelSaver.ps1"
+.\Instalar-WheelSaver.ps1
 ```
 
 Luego abre `claude` y usa:
@@ -96,7 +93,6 @@ Luego abre `claude` y usa:
 ```
 WheelSaver/
 ├── cli.py                    # CLI unificado (Typer + Rich)
-├── dashboard.py              # Dashboard Streamlit
 ├── api/main.py               # API REST FastAPI
 ├── scraper/
 │   ├── github_fetcher.py     # Scraper GraphQL (httpx)
@@ -104,14 +100,16 @@ WheelSaver/
 ├── scripts/
 │   ├── import_from_evanli.py # Importador EvanLi
 │   └── scrape_gitstar_ranking.py  # Scraper gitstar-ranking
+├── services/
+│   └── project_auditor.py    # Detector de stack del proyecto
 ├── .agents/skills/
 │   ├── wheel_saver/          # Skill: auditoria completa
 │   ├── wheel-ready/          # Skill: checklist de proyecto
 │   └── wheel-swap/           # Skill: busca alternativas
-├── tests/                    # 18 tests con pytest
-├── data/top_repos.db         # BD SQLite (~23k repos)
+├── frontend/                 # UI web (HTML + CSS + JS)
+├── tests/                    # Tests con pytest
 ├── Dockerfile                # Contenedor Python slim
-└── docker-compose.yml        # Orquestacion Docker
+└── pyproject.toml            # Config del proyecto
 ```
 
 ## Comandos del CLI
@@ -124,10 +122,10 @@ wheelsaver import evanli       # Importar EvanLi
 wheelsaver import gitstar      # Importar gitstar-ranking
 wheelsaver api                 # Lanzar API REST
 wheelsaver docker              # Levantar en Docker
-wheelsaver dashboard           # Lanzar Dashboard
 wheelsaver ready               # Checklist del proyecto
 wheelsaver swap <feature>      # Buscar alternativas
-wheelsaver --install-completion  # Autocompletado
+wheelsaver skillify <repo>     # Convertir repo en skill de IA
+wheelsaver ask <pregunta>      # Consultar a la IA con RAG
 ```
 
 ## Configuracion en GitHub

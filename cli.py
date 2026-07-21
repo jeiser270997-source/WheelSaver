@@ -15,11 +15,22 @@ Uso:
 
 import os
 import re
+import sys
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+
+# Reconfigurar stdout/stderr en Windows para evitar UnicodeEncodeError con cp1252
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 app = typer.Typer(
     name="wheelsaver",
@@ -34,7 +45,7 @@ console = Console()
 
 # Sanitizador para Windows cp1252 — limpia emojis y no-ASCII
 def clean(text, max_len=80):
-    """Limpia texto para terminal Windows (cp1252)."""
+    """Limpia texto para terminal Windows."""
     if not text:
         return ""
     # Remueve todo lo que no sea ASCII imprimible (+ acentos comunes)

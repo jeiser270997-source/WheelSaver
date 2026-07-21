@@ -14,6 +14,7 @@ scripts/scrape_gitstar_ranking.py
 services/project_auditor.py
 tests/test_api_async.py
 tests/test_db_manager.py
+tests/test_e2e_ui.py
 tests/test_search.py
 wheelsaver.egg-info/PKG-INFO
 wheelsaver.egg-info/SOURCES.txt
