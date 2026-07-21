@@ -480,7 +480,38 @@ Faltan los siguientes componentes críticos:
 
 Dame un informe de Auditoría Profunda indicando el impacto de los hallazgos y un consejo directo.
 """
+    # Si no hay proveedores LLM configurados (Modo 100% Offline / Sin LLM API keys)
+    if not _get_active_providers():
+        report_lines = [
+            "### 🛞 WheelSaver — Informe de Auditoría Local (Modo 100% Offline)",
+            f"**Stack**: {audit_data['stack_str']} | **Framework**: {audit_data['framework'] or 'No detectado'}\n",
+        ]
+        if missing_categories:
+            report_lines.append("**Componentes Faltantes Recomendados:**")
+            for label, cat, keywords in missing_categories:
+                report_lines.append(f"- **{label}** (Categoría: `{cat}`): Se sugiere instalar librerías para `{keywords}`")
+            report_lines.append("")
+        else:
+            report_lines.append("✅ **Todos los checks básicos de la estructura están cubiertos.**\n")
+
+        if static_analysis:
+            sec = static_analysis.get("security", {})
+            dc = static_analysis.get("dead_code", {})
+            cx = static_analysis.get("complexity", {})
+            report_lines.append("**Resultados de Análisis Estático Local (Bandit + Vulture + Radon):**")
+            if sec.get("available"):
+                sev = sec.get("by_severity", {})
+                report_lines.append(f"- 🔐 **Seguridad (bandit)**: {sec.get('total_findings', 0)} hallazgos (HIGH: {sev.get('HIGH',0)}, MEDIUM: {sev.get('MEDIUM',0)}, LOW: {sev.get('LOW',0)})")
+            if dc.get("available"):
+                report_lines.append(f"- 🧹 **Código Muerto (vulture)**: {dc.get('total_findings', 0)} variables/funciones sin uso")
+            if cx.get("available"):
+                report_lines.append(f"- ⚡ **Complejidad (radon)**: {cx.get('high_complexity_count', 0)} funciones con alta complejidad ciclomática (rango D/E/F)")
+
+        report_lines.append("\n[dim]Nota: Para profundizar con RAG multi-proveedor, configura una API key en tu .env (GROQ_API_KEY, GOOGLE_API_KEY, etc.)[/dim]")
+        return "\n".join(report_lines)
+
     try:
         return await ask_llm(system_prompt=sys_prompt, user_prompt=user_prompt, temperature=0.3)
     except Exception as e:
         return f"Error en la auditoría AI: {e}"
+
