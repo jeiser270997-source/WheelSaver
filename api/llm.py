@@ -413,15 +413,73 @@ REGLAS DEL SKILL.MD:
         return f"---\nname: Skill Error\ndescription: Falló la generacion\n---\nError: {e}"
 
 
+def _build_static_analysis_summary(static_analysis: dict) -> str:
+    if not static_analysis:
+        return ""
+    sec = static_analysis.get("security", {})
+    dc = static_analysis.get("dead_code", {})
+    cx = static_analysis.get("complexity", {})
+
+    static_parts = []
+    if sec.get("available"):
+        sev = sec.get("by_severity", {})
+        total = sec.get("total_findings", 0)
+        static_parts.append(
+            f"--- Seguridad (bandit) ---\n"
+            f"Hallazgos totales: {total}\n"
+            f"HIGH: {sev.get('HIGH', 0)} | MEDIUM: {sev.get('MEDIUM', 0)} | LOW: {sev.get('LOW', 0)}"
+        )
+        top = sec.get("top_findings", [])
+        if top:
+            static_parts.append("Top hallazgos:")
+            for f in top:
+                static_parts.append(f"  - {f.get('file','')}:{f.get('line','')} [{f.get('severity','')}] {f.get('issue','')[:100]}")
+
+    if dc.get("available"):
+        total = dc.get("total_findings", 0)
+        static_parts.append(f"--- Código Muerto (vulture) ---\nHallazgos: {total}")
+
+    if cx.get("available"):
+        total = cx.get("high_complexity_count", 0)
+        static_parts.append(f"--- Complejidad Ciclomática (radon) ---\nFunciones con rango D/E/F: {total}")
+
+    return "\n\n## Resultados de Análisis Estático\n\n" + "\n\n".join(static_parts) if static_parts else ""
+
+
+def _build_offline_audit_report(audit_data: dict, missing_categories: list, static_analysis: dict) -> str:
+    report_lines = [
+        "### 🛞 WheelSaver — Informe de Auditoría Local (Modo 100% Offline)",
+        f"**Stack**: {audit_data['stack_str']} | **Framework**: {audit_data['framework'] or 'No detectado'}\n",
+    ]
+    if missing_categories:
+        report_lines.append("**Componentes Faltantes Recomendados:**")
+        for label, cat, keywords in missing_categories:
+            report_lines.append(f"- **{label}** (Categoría: `{cat}`): Se sugiere instalar librerías para `{keywords}`")
+        report_lines.append("")
+    else:
+        report_lines.append("✅ **Todos los checks básicos de la estructura están cubiertos.**\n")
+
+    if static_analysis:
+        sec = static_analysis.get("security", {})
+        dc = static_analysis.get("dead_code", {})
+        cx = static_analysis.get("complexity", {})
+        report_lines.append("**Resultados de Análisis Estático Local (Bandit + Vulture + Radon):**")
+        if sec.get("available"):
+            sev = sec.get("by_severity", {})
+            report_lines.append(f"- 🔐 **Seguridad (bandit)**: {sec.get('total_findings', 0)} hallazgos (HIGH: {sev.get('HIGH',0)}, MEDIUM: {sev.get('MEDIUM',0)}, LOW: {sev.get('LOW',0)})")
+        if dc.get("available"):
+            report_lines.append(f"- 🧹 **Código Muerto (vulture)**: {dc.get('total_findings', 0)} variables/funciones sin uso")
+        if cx.get("available"):
+            report_lines.append(f"- ⚡ **Complejidad (radon)**: {cx.get('high_complexity_count', 0)} funciones con alta complejidad ciclomática (rango D/E/F)")
+
+    report_lines.append("\n[dim]Nota: Para profundizar con RAG multi-proveedor, configura una API key en tu .env (GROQ_API_KEY, GOOGLE_API_KEY, etc.)[/dim]")
+    return "\n".join(report_lines)
+
+
 async def audit_project_with_ai(audit_data: dict, missing_categories: list, static_analysis: dict = None) -> str:
     """
     Realiza una auditoría profunda de la arquitectura y el estado del proyecto local.
     Si todo esta perfecto (missing_categories está vacío), devuelve el badge oficial.
-
-    Args:
-        audit_data: Dict con stack, framework, checks (de detect_stack_and_framework).
-        missing_categories: Lista de tuplas (label, cat, keywords) con lo que falta.
-        static_analysis: Dict opcional con resultados de static_analyzer (bandit/vulture/radon).
     """
     if not missing_categories and not static_analysis:
         return "✅ **APROBADO POR WHEELSAVER**\n\nTu proyecto cumple con todos los estándares, está blindado y sin deuda técnica. ¡Puedes cerrar el proyecto o lanzarlo a producción con total confianza!"
@@ -433,42 +491,8 @@ async def audit_project_with_ai(audit_data: dict, missing_categories: list, stat
         "de seguridad o calidad de código existen, y cómo arreglarlo rápido."
     )
 
-    missing_str = ""
-    if missing_categories:
-        missing_str = "\n".join([f"- {label} (Categoria: {cat})" for label, cat, _ in missing_categories])
-
-    # Construir sección de análisis estático si está disponible
-    static_str = ""
-    if static_analysis:
-        sec = static_analysis.get("security", {})
-        dc = static_analysis.get("dead_code", {})
-        cx = static_analysis.get("complexity", {})
-
-        static_parts = []
-        if sec.get("available"):
-            sev = sec.get("by_severity", {})
-            total = sec.get("total_findings", 0)
-            static_parts.append(
-                f"--- Seguridad (bandit) ---\n"
-                f"Hallazgos totales: {total}\n"
-                f"HIGH: {sev.get('HIGH', 0)} | MEDIUM: {sev.get('MEDIUM', 0)} | LOW: {sev.get('LOW', 0)}"
-            )
-            top = sec.get("top_findings", [])
-            if top:
-                static_parts.append("Top hallazgos:")
-                for f in top:
-                    static_parts.append(f"  - {f.get('file','')}:{f.get('line','')} [{f.get('severity','')}] {f.get('issue','')[:100]}")
-
-        if dc.get("available"):
-            total = dc.get("total_findings", 0)
-            static_parts.append(f"--- Código Muerto (vulture) ---\nHallazgos: {total}")
-
-        if cx.get("available"):
-            total = cx.get("high_complexity_count", 0)
-            static_parts.append(f"--- Complejidad Ciclomática (radon) ---\nFunciones con rango D/E/F: {total}")
-
-        if static_parts:
-            static_str = "\n\n## Resultados de Análisis Estático\n\n" + "\n\n".join(static_parts)
+    missing_str = "\n".join([f"- {label} (Categoria: {cat})" for label, cat, _ in missing_categories]) if missing_categories else ""
+    static_str = _build_static_analysis_summary(static_analysis)
 
     user_prompt = f"""He auditado este proyecto localmente.
 Stack: {audit_data['stack_str']}
@@ -480,38 +504,12 @@ Faltan los siguientes componentes críticos:
 
 Dame un informe de Auditoría Profunda indicando el impacto de los hallazgos y un consejo directo.
 """
-    # Si no hay proveedores LLM configurados (Modo 100% Offline / Sin LLM API keys)
     if not _get_active_providers():
-        report_lines = [
-            "### 🛞 WheelSaver — Informe de Auditoría Local (Modo 100% Offline)",
-            f"**Stack**: {audit_data['stack_str']} | **Framework**: {audit_data['framework'] or 'No detectado'}\n",
-        ]
-        if missing_categories:
-            report_lines.append("**Componentes Faltantes Recomendados:**")
-            for label, cat, keywords in missing_categories:
-                report_lines.append(f"- **{label}** (Categoría: `{cat}`): Se sugiere instalar librerías para `{keywords}`")
-            report_lines.append("")
-        else:
-            report_lines.append("✅ **Todos los checks básicos de la estructura están cubiertos.**\n")
-
-        if static_analysis:
-            sec = static_analysis.get("security", {})
-            dc = static_analysis.get("dead_code", {})
-            cx = static_analysis.get("complexity", {})
-            report_lines.append("**Resultados de Análisis Estático Local (Bandit + Vulture + Radon):**")
-            if sec.get("available"):
-                sev = sec.get("by_severity", {})
-                report_lines.append(f"- 🔐 **Seguridad (bandit)**: {sec.get('total_findings', 0)} hallazgos (HIGH: {sev.get('HIGH',0)}, MEDIUM: {sev.get('MEDIUM',0)}, LOW: {sev.get('LOW',0)})")
-            if dc.get("available"):
-                report_lines.append(f"- 🧹 **Código Muerto (vulture)**: {dc.get('total_findings', 0)} variables/funciones sin uso")
-            if cx.get("available"):
-                report_lines.append(f"- ⚡ **Complejidad (radon)**: {cx.get('high_complexity_count', 0)} funciones con alta complejidad ciclomática (rango D/E/F)")
-
-        report_lines.append("\n[dim]Nota: Para profundizar con RAG multi-proveedor, configura una API key en tu .env (GROQ_API_KEY, GOOGLE_API_KEY, etc.)[/dim]")
-        return "\n".join(report_lines)
+        return _build_offline_audit_report(audit_data, missing_categories, static_analysis)
 
     try:
         return await ask_llm(system_prompt=sys_prompt, user_prompt=user_prompt, temperature=0.3)
     except Exception as e:
         return f"Error en la auditoría AI: {e}"
+
 
