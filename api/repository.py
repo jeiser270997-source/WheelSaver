@@ -154,18 +154,22 @@ async def get_languages_async(db: aiosqlite.Connection, min_repos: int, limit: i
 async def list_repos_async(
     db: aiosqlite.Connection, order_col: str, language: str, per_page: int, offset: int
 ):
-    order_map = {"stars": "stars", "name": "name", "updated_at": "updated_at"}
-    safe_order = order_map.get(order_col, "stars")
+    query_base = "SELECT * FROM repos"
+    params: list[str | int] = []
+
     if language:
-        cursor = await db.execute(
-            f"SELECT * FROM repos WHERE language = ? ORDER BY {safe_order} DESC LIMIT ? OFFSET ?",
-            (language, per_page, offset),
-        )
+        query_base += " WHERE language = ?"
+        params.append(language)
+
+    if order_col == "name":
+        query_base += " ORDER BY name DESC LIMIT ? OFFSET ?"
+    elif order_col == "updated_at":
+        query_base += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
     else:
-        cursor = await db.execute(
-            f"SELECT * FROM repos ORDER BY {safe_order} DESC LIMIT ? OFFSET ?",
-            (per_page, offset),
-        )
+        query_base += " ORDER BY stars DESC LIMIT ? OFFSET ?"
+
+    params.extend([per_page, offset])
+    cursor = await db.execute(query_base, tuple(params))
     repos = await cursor.fetchall()
     return [dict(r) for r in repos]
 

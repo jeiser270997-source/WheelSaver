@@ -41,7 +41,7 @@ def _run_tool(cmd: list[str], cwd: Path) -> tuple[int, str, str]:
 def _run_bandit(target: Path) -> dict:
     """Ejecuta bandit (seguridad) y devuelve resumen por severidad."""
     code, stdout, stderr = _run_tool(
-        ["bandit", "-r", str(target), "-f", "json", "-q"], cwd=target
+        ["bandit", "-r", str(target), "-x", "tests,venv,.venv,data,.audit", "-f", "json", "-q"], cwd=target
     )
     if code == -1:
         return {"available": False, "error": stderr}
