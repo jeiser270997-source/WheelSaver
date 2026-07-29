@@ -8,7 +8,7 @@ Incluye skills nativos para Claude Code que auditan tus proyectos y te recomiend
 librerias existentes, evitando que codees desde cero lo que ya esta resuelto.
 
 ```
-📦 25,411 repos · 🌐 149 lenguajes · ⚡ Búsqueda FTS5 en milisegundos
+📦 25,411 repos · 🌐 149 lenguajes · ⚡ Búsqueda FTS5 en milisegundos · 🛡️ v3.3.1
 ```
 
 ## Componentes
@@ -16,20 +16,21 @@ librerias existentes, evitando que codees desde cero lo que ya esta resuelto.
 | Componente | Qué hace |
 |---|---|
 | **3 Scrapers** | GitHub GraphQL API + EvanLi/Github-Ranking + gitstar-ranking.com |
-| **Base de datos** | SQLite + FTS5, actualización local programada a la 1:00 AM |
-| **CLI unificado** | 12 comandos con Typer + Rich (tablas, colores, autocompletado UTF-8) |
+| **Base de datos** | SQLite + FTS5 con triggers incrementales |
+| **CLI unificado** | 12 comandos con Typer + Rich (`wheelsaver api --dev`, etc.) |
 | **API REST** | FastAPI con 9+ endpoints + Swagger en `/docs` |
+| **Seguridad** | Sanitización anti-SQL/FTS injection, Rate Limiting (20 req/min search, 5 req/min ask), protección `/scrape` vía `SCRAPE_ENABLED`/`X-API-Key` |
 | **3 Skills IA** | `wheel_saver` `wheel-ready` `wheel-swap` para Claude Code / Gemini / Antigravity |
 | **Análisis estático** | `wheelsaver audit-code` ejecuta bandit + vulture + radon |
-| **Ejecución Local** | 100% autónomo local (sin dependencias en la nube ni CI externos) |
-| **Docker** | Dockerfile para despliegue en contenedor |
+| **CI & Tests** | GitHub Actions CI + 80+ tests automatizados con `pytest` y Playwright E2E |
+| **Docker** | Dockerfile con extras `.[audit]` para despliegue en contenedor |
 
 
 ## Inicio rápido
 
 ```bash
 # 1. Instalar dependencias
-pip install -e .
+pip install -e ".[dev,audit]"
 
 # 2. Configurar token de GitHub (para el scraper)
 echo "GITHUB_TOKEN=ghp_tu_token_aqui" > .env
@@ -41,8 +42,8 @@ wheelsaver swap "pdf parser"              # Buscar alternativas
 wheelsaver ready                          # Checklist del proyecto
 wheelsaver audit-code .                   # Auditoría de seguridad y calidad
 
-# 3b. Lanzar API REST
-wheelsaver api                            # → http://localhost:8000/docs
+# 3b. Lanzar API REST (modo desarrollo)
+wheelsaver api --dev                      # → http://localhost:8000/docs
 ```
 
 ## Programación de Actualización Local (Windows / Linux)
@@ -78,7 +79,7 @@ Luego abre la IA en cualquier proyecto y usa:
 WheelSaver/
 ├── cli.py                    # CLI unificado (Typer + Rich con soporte UTF-8)
 ├── api/main.py               # API REST FastAPI + Web UI estática
-├── api/llm.py                # Failover Multi-LLM (Groq, Cerebras, Gemini, OpenRouter, etc.)
+├── api/llm.py                # Failover Multi-LLM (Groq, Cerebras, Gemini, OpenRouter, etc.) con timeout global de 45s y caché
 ├── scraper/
 │   ├── github_fetcher.py     # Scraper GraphQL (httpx)
 │   └── db_manager.py         # ORM SQLite + FTS5 + Live Fallback API
@@ -92,10 +93,10 @@ WheelSaver/
 │   ├── wheel_saver/          # Skill: auditoría completa
 │   ├── wheel-ready/          # Skill: checklist de proyecto
 │   └── wheel-swap/           # Skill: busca alternativas
-├── frontend/                 # UI web (HTML + CSS + JS dinámico)
-├── tests/                    # 33 tests con pytest + Playwright E2E
-├── Dockerfile                # Contenedor Python slim
-└── pyproject.toml            # Config del proyecto
+├── frontend/                 # UI web (HTML + CSS + JS dinámico, responsive mobile)
+├── tests/                    # 80+ tests con pytest + Playwright E2E + CI GitHub Actions
+├── Dockerfile                # Contenedor Python slim con extras de auditoría
+└── pyproject.toml            # Config del proyecto v3.3.1
 ```
 
 ## Comandos del CLI
@@ -106,7 +107,7 @@ wheelsaver stats               # Estadísticas con Panels
 wheelsaver scrape              # Scraper GraphQL desde Top 1
 wheelsaver import evanli       # Importar EvanLi
 wheelsaver import gitstar      # Importar gitstar-ranking
-wheelsaver api                 # Lanzar API REST
+wheelsaver api                 # Lanzar API REST (127.0.0.1 por defecto, --dev para reload)
 wheelsaver docker              # Levantar en Docker
 wheelsaver ready               # Checklist + análisis estático del proyecto
 wheelsaver audit-code <ruta>   # Seguridad, código muerto y complejidad

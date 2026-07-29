@@ -19,17 +19,17 @@ para busquedas ultrarrápidas y offline.
 - Alternativas:  `wheelsaver swap <feature>`
 
 ### Tests
-- `python -m pytest -v` (33 tests unitarios, de API e interfaz Playwright)
+- `python -m pytest -v` (80+ tests unitarios, de API, CLI e interfaz Playwright E2E)
 
 ## Arquitectura
-- `api/llm.py`: Sistema RAG multi-LLM con failover automático entre proveedores free tier y **Modo 100% Offline / Zero-LLM** cuando no hay API keys configuradas.
-- `scraper/db_manager.py`: ORM ligero, upserts, FTS5, `make_repo_id()`, `SYNONYM_MAP` para expansión de sinónimos técnicos offline.
-- `cli.py`: Punto de entrada unificado con Typer + Rich (tablas, paneles, colores con soporte UTF-8 en Windows).
-- `api/main.py`: API REST con FastAPI (endpoints: /search, /stats, /repos, /languages, /top, /health, /scrape, /ask) y Web UI.
-- `services/project_auditor.py`: Detector modular de stack del proyecto (Rank A de complejidad ciclomática).
+- `api/llm.py`: Sistema RAG multi-LLM con failover automático entre proveedores free tier, timeout global de 45s, caché de respuestas y modo offline.
+- `scraper/db_manager.py`: ORM ligero, upserts, FTS5 con triggers incrementales, `make_repo_id()`, `SYNONYM_MAP` para expansión de sinónimos técnicos.
+- `cli.py`: Punto de entrada unificado con Typer + Rich (`wheelsaver api --dev`, host local por defecto `127.0.0.1`).
+- `api/main.py`: API REST con FastAPI (endpoints: `/search`, `/stats`, `/repos`, `/languages`, `/top`, `/health`, `/scrape`, `/ask`) protegida con rate limiting y guardias en `/scrape`.
+- `services/project_auditor.py`: Detector modular de stack del proyecto.
 - `services/static_analyzer.py`: Análisis estático (bandit + vulture + radon).
 - `~/.wheelsaver/top_repos.db`: Base de datos SQLite (25,411 repos, indice FTS5).
-- `tests/`: 33 tests con pytest + BD in-memory + Playwright E2E en hilo aislado.
+- `tests/`: 80+ tests con pytest + BD in-memory + Playwright E2E + GitHub Actions CI (`.github/workflows/test.yml`).
 
 ## Reglas de Desarrollo
 - Ejecución 100% local y autónoma (sin dependencias de GitHub Actions ni CI externos).
