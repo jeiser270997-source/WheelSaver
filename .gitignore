@@ -14,3 +14,6 @@ data/
 *.db-shm
 *.db-wal
 repomix_*.md
+repomix_parts/
+*.egg-info/
+.audit/

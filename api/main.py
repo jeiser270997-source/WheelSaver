@@ -9,8 +9,9 @@ Uso:
 Documentacion automatica: http://localhost:8000/docs
 """
 
+import asyncio
 import aiosqlite
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -35,7 +36,7 @@ limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(
     title="WheelSaver API",
     description="Busca y analiza repositorios de GitHub desde la base de datos local de WheelSaver. RAG multi-proveedor con failover automático.",
-    version="3.3.0",
+    version="3.3.1",
 )
 
 app.state.limiter = limiter
@@ -59,7 +60,7 @@ async def root():
 async def health(db: aiosqlite.Connection = Depends(get_db)):
     """Healthcheck simple."""
     stats = await get_stats_async(db)
-    return {"status": "ok", "version": "3.0.0", "repos": stats["total_repos"]}
+    return {"status": "ok", "version": app.version, "repos": stats["total_repos"]}
 
 
 @app.get("/search")
@@ -82,9 +83,9 @@ async def search(
     else:
         repos = await search_repos_multi_keywords_async(db, keywords, limit=limit)
 
-    # Filtros post-query
+    # Filtros post-query (safe: language puede ser None)
     if language:
-        repos = [r for r in repos if r["language"].lower() == language.lower()]
+        repos = [r for r in repos if r.get("language") and r["language"].lower() == language.lower()]
     if min_stars:
         repos = [r for r in repos if r["stars"] >= min_stars]
 
@@ -153,17 +154,25 @@ async def trigger_scrape(
     request: Request,
     background_tasks: BackgroundTasks,
     min_stars: int = Query(500, ge=10, description="Estrellas minimas para buscar"),
+    x_api_key: str | None = Header(None, alias="X-API-Key"),
 ):
     """
     Lanza el scraper de GitHub de forma asíncrona en el mismo proceso.
-    Limitado a 1 vez por hora por IP.
-
-    Lock atómico vía INSERT ... WHERE NOT EXISTS:
-    - Una sola sentencia SQL combina verificación + adquisición del lock
-    - Si un lock previo lleva +6h, se auto-recupera (marca como 'failed')
+    Limitado a 1 vez por hora por IP. Requiere SCRAPE_ENABLED=1 o X-API-Key válido si SCRAPE_API_KEY está configurado.
     """
+    import os
     from datetime import datetime, timezone
     from scraper.github_fetcher import fetch_top_repos
+
+    # Validar autorización por env var o header
+    scrape_enabled = os.getenv("SCRAPE_ENABLED", "1") == "1"
+    required_key = os.getenv("SCRAPE_API_KEY")
+
+    if not scrape_enabled:
+        raise HTTPException(status_code=403, detail="El endpoint /scrape está deshabilitado en esta instancia.")
+
+    if required_key and x_api_key != required_key:
+        raise HTTPException(status_code=401, detail="Header X-API-Key inválido o ausente.")
 
     STALE_TIMEOUT_HOURS = 6
 
@@ -171,13 +180,23 @@ async def trigger_scrape(
         db = await aiosqlite.connect(DB_PATH)
     except Exception:
         # La BD aun no existe (fresh install) — continuar sin lock
-        background_tasks.add_task(fetch_top_repos, min_stars)
+        background_tasks.add_task(asyncio.to_thread, fetch_top_repos, min_stars)
         return {"status": "ok", "message": f"Scraper iniciado (min_stars={min_stars})"}
 
     db.row_factory = aiosqlite.Row
 
     try:
         now = datetime.now(timezone.utc).isoformat()
+
+        # Asegurar existencia de tabla run_history para evitar carreras en primer uso
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS run_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                started_at TEXT,
+                finished_at TEXT,
+                status TEXT
+            )
+        """)
 
         # 1. Auto-recuperar locks stale (> 6h)
         cursor = await db.execute(
@@ -215,14 +234,13 @@ async def trigger_scrape(
         new_run_id = cursor.lastrowid
         await db.commit()
     except aiosqlite.OperationalError:
-        # Tabla run_history aun no existe (primera ejecucion) — continuar sin lock
         new_run_id = None
         await db.commit()
     finally:
         await db.close()
 
-    # 3. Programar background task con el run_id (None si fresh install)
-    background_tasks.add_task(fetch_top_repos, min_stars, new_run_id)
+    # 3. Programar background task en hilo separado (no bloquea event loop)
+    background_tasks.add_task(asyncio.to_thread, fetch_top_repos, min_stars, new_run_id)
     return {
         "status": "ok",
         "message": f"Scraper iniciado (run_id={new_run_id}, min_stars={min_stars})",

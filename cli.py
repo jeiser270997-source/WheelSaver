@@ -50,7 +50,7 @@ def clean(text, max_len=80):
         return ""
     # Remueve todo lo que no sea ASCII imprimible (+ acentos comunes)
     cleaned = re.sub(r"[^\x20-\x7EÀ-ÿĀ-ſ]", "", text)
-    return cleaned[:max_len] + "..." if len(text) > max_len else cleaned
+    return cleaned[:max_len] + "..." if len(cleaned) > max_len else cleaned
 
 
 @app.command()
@@ -71,7 +71,7 @@ def search(
 
     # Filtros post-query
     if language:
-        results = [r for r in results if r["language"].lower() == language.lower()]
+        results = [r for r in results if r.get("language") and r["language"].lower() == language.lower()]
     if min_stars:
         results = [r for r in results if r["stars"] >= min_stars]
 
@@ -150,49 +150,36 @@ def import_gitstar(
     pages: int = typer.Option(0, "--pages", "-p", help="Numero de paginas (0 = todas, max 100)"),
 ):
     """Scrapea gitstar-ranking.com para rankings de repos."""
-    import sys
-
     import scripts.scrape_gitstar_ranking as gs
 
     console.print("[bold blue]Scrapeando gitstar-ranking.com...[/bold blue]")
 
-    # Guardar args originales y poner los nuestros
-    old_argv = sys.argv
-    args = (
-        ["scrape_gitstar_ranking.py", f"--pages={pages}"]
-        if pages
-        else ["scrape_gitstar_ranking.py"]
-    )
-    sys.argv = args
-    try:
-        gs.main()
-    finally:
-        sys.argv = old_argv
+    gs.main(max_pages=pages if pages > 0 else None)
     console.print("[bold green]Scrapeo gitstar-ranking completado.[/bold green]")
 
 
 @app.command()
 def api(
-    host: str = typer.Option("0.0.0.0", "--host", help="Direccion de escucha"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Direccion de escucha"),
     port: int = typer.Option(8000, "--port", "-p", help="Puerto"),
+    dev: bool = typer.Option(False, "--dev", help="Modo desarrollo con auto-reload"),
 ):
     """Lanza el servidor FastAPI con la API REST."""
     import uvicorn
 
     console.print(f"[bold blue]Lanzando API en http://{host}:{port}[/bold blue]")
     console.print("[dim]Documentacion: http://localhost:" + str(port) + "/docs[/dim]")
-    uvicorn.run("api.main:app", host=host, port=port, reload=True)
+    uvicorn.run("api.main:app", host=host, port=port, reload=dev)
 
 
 @app.command()
 def docker():
     """Levanta WheelSaver en Docker (docker compose up)."""
     import subprocess
-    import sys
 
     console.print("[bold blue]Levantando WheelSaver con Docker...[/bold blue]")
     result = subprocess.run(
-        [sys.executable, "-m", "docker", "compose", "up", "--build", "-d"],
+        ["docker", "compose", "up", "--build", "-d"],
         capture_output=True,
         text=True,
         cwd=os.path.dirname(os.path.abspath(__file__)),
@@ -220,7 +207,6 @@ def ready(
     # Detectar stack usando la capa de servicio
     import sys
 
-    sys.path.append(str(Path(__file__).parent))
     from services.project_auditor import detect_stack_and_framework
 
     audit_data = detect_stack_and_framework(target)
@@ -257,6 +243,8 @@ def ready(
     # Si falta algo, buscar en BD
     if missing_categories:
         console.print("\n[bold yellow]Buscando recomendaciones en la BD...[/bold yellow]\n")
+        if len(missing_categories) > 3:
+            console.print(f"[dim]Mostrando recomendaciones solo para las primeras 3 de {len(missing_categories)} categorias faltantes.[/dim]")
         for label, cat, keywords in missing_categories[:3]:  # Max 3 busquedas
             kw_list = keywords.split()[:3]
             kw_str = " ".join(kw_list)

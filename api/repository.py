@@ -47,7 +47,12 @@ async def search_repos_multi_keywords_async(
     if not keywords:
         return []
 
-    fts_query_and = " AND ".join(f'"{kw}"' for kw in keywords)
+    def _esc_fts(kw: str) -> str:
+        """Escapa comillas dobles internas y remueve operadores especiales de FTS5."""
+        import re
+        kw_clean = re.sub(r'[*():^"=]', ' ', kw)
+        return kw_clean.strip()
+    fts_query_and = " AND ".join(f'"{_esc_fts(kw)}"' for kw in keywords)
 
     try:
         cursor = await db.execute(
@@ -67,7 +72,7 @@ async def search_repos_multi_keywords_async(
             results_list = [dict(r) for r in results]
             seen = {r["name"] for r in results_list}
 
-            fts_query_or = " OR ".join(f'"{kw}"' for kw in keywords)
+            fts_query_or = " OR ".join(f'"{_esc_fts(kw)}"' for kw in keywords)
             cursor = await db.execute(
                 """
                 SELECT r.name, r.owner, r.description, r.url, r.stars, r.language, r.topics
@@ -115,14 +120,14 @@ async def get_stats_async(db: aiosqlite.Connection):
     stats["stars_avg"] = round(row["avg_s"]) if row["avg_s"] else 0
 
     cursor = await db.execute(
-        'SELECT COUNT(DISTINCT language) as cnt FROM repos WHERE language != ""'
+        'SELECT COUNT(DISTINCT language) as cnt FROM repos WHERE language IS NOT NULL AND language != ""'
     )
     row = await cursor.fetchone()
     stats["languages"] = row["cnt"]
 
     cursor = await db.execute("""
         SELECT language, COUNT(*) as cnt FROM repos
-        WHERE language != "" GROUP BY language ORDER BY cnt DESC LIMIT 10
+        WHERE language IS NOT NULL AND language != "" GROUP BY language ORDER BY cnt DESC LIMIT 10
     """)
     top_langs = await cursor.fetchall()
     stats["top_languages"] = {r["language"]: r["cnt"] for r in top_langs}
@@ -153,7 +158,8 @@ async def get_languages_async(db: aiosqlite.Connection, min_repos: int, limit: i
 async def list_repos_async(
     db: aiosqlite.Connection, order_col: str, language: str, per_page: int, offset: int
 ):
-    safe_order = order_col if order_col in ("stars", "name", "updated_at") else "stars"
+    order_map = {"stars": "stars", "name": "name", "updated_at": "updated_at"}
+    safe_order = order_map.get(order_col, "stars")
     if language:
         cursor = await db.execute(
             f"SELECT * FROM repos WHERE language = ? ORDER BY {safe_order} DESC LIMIT ? OFFSET ?",
@@ -300,8 +306,5 @@ async def _upsert_repos_async(db: aiosqlite.Connection, repos_list: list[dict]):
     )
     await db.commit()
 
-    try:
-        await db.execute("INSERT INTO repos_fts(repos_fts) VALUES('rebuild')")
-        await db.commit()
-    except Exception:
-        pass
+    # Sync FTS5 — triggers AFTER INSERT manejan sync incremental
+    # No hacer rebuild manual: triggers ya actualizan repos_fts

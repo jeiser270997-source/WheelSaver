@@ -30,7 +30,10 @@ def make_repo_id(owner, name):
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
+_DB_INITIALIZED = False
+
 def init_db():
+    global _DB_INITIALIZED
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
     if not os.path.exists(DB_PATH):
@@ -48,12 +51,12 @@ def init_db():
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             owner TEXT NOT NULL,
-            description TEXT,
+            description TEXT DEFAULT '',
             url TEXT NOT NULL,
             stars INTEGER NOT NULL,
-            language TEXT,
-            topics TEXT,
-            updated_at TEXT,
+            language TEXT DEFAULT '',
+            topics TEXT DEFAULT '',
+            updated_at TEXT DEFAULT '',
             is_archived INTEGER DEFAULT 0
         )
     """)
@@ -62,8 +65,9 @@ def init_db():
     for col in ["is_archived"]:
         try:
             cursor.execute(f"ALTER TABLE repos ADD COLUMN {col} INTEGER DEFAULT 0")
-        except Exception:
-            pass
+        except sqlite3.OperationalError as e:
+            if "duplicate" not in str(e).lower():
+                logger.warning("Error agregando columna legacy {}: {}", col, e)
 
     # Crear tabla de metadatos de ejecución
     cursor.execute("""
@@ -93,6 +97,29 @@ def init_db():
             content_rowid='rowid'
         )
     """)
+
+    # Crear triggers FTS5 incrementales (solo si no existen)
+    if not _DB_INITIALIZED:
+        try:
+            cursor.executescript("""
+                CREATE TRIGGER IF NOT EXISTS repos_ai AFTER INSERT ON repos BEGIN
+                    INSERT INTO repos_fts(rowid, name, description, topics)
+                    VALUES (new.rowid, new.name, new.description, new.topics);
+                END;
+                CREATE TRIGGER IF NOT EXISTS repos_ad AFTER DELETE ON repos BEGIN
+                    INSERT INTO repos_fts(repos_fts, rowid, name, description, topics)
+                    VALUES ('delete', old.rowid, old.name, old.description, old.topics);
+                END;
+                CREATE TRIGGER IF NOT EXISTS repos_au AFTER UPDATE ON repos BEGIN
+                    INSERT INTO repos_fts(repos_fts, rowid, name, description, topics)
+                    VALUES ('delete', old.rowid, old.name, old.description, old.topics);
+                    INSERT INTO repos_fts(rowid, name, description, topics)
+                    VALUES (new.rowid, new.name, new.description, new.topics);
+                END;
+            """)
+            _DB_INITIALIZED = True
+        except sqlite3.OperationalError:
+            pass  # FTS5 triggers already exist
 
     conn.commit()
     return conn
@@ -160,12 +187,7 @@ def upsert_repos(repos_list, conn=None):
 
         conn.commit()
 
-        # Sincronizar FTS después de inserts batch
-        try:
-            cursor.execute("INSERT INTO repos_fts(repos_fts) VALUES('rebuild')")
-            conn.commit()
-        except Exception:
-            pass
+        # Sync FTS5 via triggers AFTER INSERT — no rebuild manual
     finally:
         if owns_conn:
             conn.close()
@@ -286,7 +308,7 @@ def search_repos_multi_keywords(keywords, limit=20, conn=None):
         cursor = conn.cursor()
 
         try:
-            fts_query = " OR ".join(f'"{kw}"' for kw in keywords)
+            fts_query = " OR ".join(f'"{kw.replace(chr(34), chr(34)+chr(34))}"' for kw in keywords)
             cursor.execute(
                 """
                 SELECT DISTINCT r.name, r.owner, r.description, r.url, r.stars, r.language, r.topics
@@ -304,7 +326,8 @@ def search_repos_multi_keywords(keywords, limit=20, conn=None):
             used_fallback = True
             seen = set()
             cursor.execute(
-                "SELECT name, owner, description, url, stars, language, topics FROM repos ORDER BY stars DESC"
+                "SELECT name, owner, description, url, stars, language, topics FROM repos ORDER BY stars DESC LIMIT ?",
+                (limit * 20,)
             )
             all_repos = cursor.fetchall()
             results = []
@@ -431,12 +454,12 @@ def get_stats(conn=None):
         stats["stars_max"] = row[1]
         stats["stars_avg"] = round(row[2]) if row[2] else 0
 
-        cursor.execute('SELECT COUNT(DISTINCT language) FROM repos WHERE language != ""')
+        cursor.execute('SELECT COUNT(DISTINCT language) FROM repos WHERE language IS NOT NULL AND language != ""')
         stats["languages"] = cursor.fetchone()[0]
 
         cursor.execute("""
             SELECT language, COUNT(*) as cnt FROM repos
-            WHERE language != "" GROUP BY language ORDER BY cnt DESC LIMIT 10
+            WHERE language IS NOT NULL AND language != "" GROUP BY language ORDER BY cnt DESC LIMIT 10
         """)
         stats["top_languages"] = {r[0]: r[1] for r in cursor.fetchall()}
     finally:

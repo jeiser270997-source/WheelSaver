@@ -12,12 +12,14 @@ Para agregar un nuevo proveedor:
 
 import json
 import os
+import re
 
 import httpx
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
+from tenacity import retry, stop_after_attempt, wait_exponential
 
-load_dotenv()
+load_dotenv(override=True)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Configuración de proveedores
@@ -173,6 +175,7 @@ async def _ask_openai_compatible(
     client = AsyncOpenAI(
         api_key=provider["api_key"],
         base_url=provider["base_url"],
+        timeout=60.0,
     )
     response = await client.chat.completions.create(
         model=provider["model"],
@@ -263,31 +266,25 @@ _NATIVE_HANDLERS = {
 }
 
 
-from async_lru import alru_cache
-from tenacity import retry, stop_after_attempt, wait_exponential
-
 @retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=2, min=5, max=30),
+    stop=stop_after_attempt(2),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
     reraise=True
 )
-@alru_cache(maxsize=128, ttl=3600)
-async def ask_llm(system_prompt: str = "", user_prompt: str = "", **kwargs) -> str:
-    """
-    Consulta al mejor LLM disponible entre los proveedores configurados.
-    Hace failover automático: si el primero falla, prueba el siguiente.
+async def _call_handler(handler, provider, system_prompt, user_prompt, **kwargs):
+    """Wrapper con retry para cada call individual a un proveedor.
+    Separado de ask_llm para que @retry NO envuelva el failover chain completo.
+    Sin @alru_cache — no cachear excepciones."""
+    return await handler(provider, system_prompt, user_prompt, **kwargs)
 
-    Args:
-        system_prompt: Instrucciones de sistema para el modelo.
-        user_prompt: Pregunta o instrucción del usuario.
-        **kwargs: max_tokens, temperature, etc.
 
-    Returns:
-        Respuesta del primer proveedor que responda exitosamente.
+_RESPONSE_CACHE = {}
 
-    Raises:
-        RuntimeError: Si todos los proveedores fallan.
-    """
+async def _ask_llm_internal(system_prompt: str = "", user_prompt: str = "", **kwargs) -> str:
+    cache_key = (system_prompt, user_prompt)
+    if cache_key in _RESPONSE_CACHE:
+        return _RESPONSE_CACHE[cache_key]
+
     providers = _get_active_providers()
     if not providers:
         raise RuntimeError(
@@ -301,22 +298,39 @@ async def ask_llm(system_prompt: str = "", user_prompt: str = "", **kwargs) -> s
         try:
             if provider["type"] == "openai":
                 handler = _OPENAI_HANDLERS.get(provider["name"], _ask_openai_compatible)
-                return await handler(provider, system_prompt, user_prompt, **kwargs)
+                res = await _call_handler(handler, provider, system_prompt, user_prompt, **kwargs)
+                _RESPONSE_CACHE[cache_key] = res
+                return res
             else:  # native
                 handler = _NATIVE_HANDLERS.get(provider["name"])
                 if handler:
-                    return await handler(provider, system_prompt, user_prompt, **kwargs)
+                    res = await _call_handler(handler, provider, system_prompt, user_prompt, **kwargs)
+                    _RESPONSE_CACHE[cache_key] = res
+                    return res
                 else:
                     errors.append(f"{provider['name']}: handler desconocido")
                     continue
         except Exception as e:
-            err_msg = f"{provider['name']} ({provider.get('model', '?')}): {e}"
+            clean_err = re.sub(r"(\?key=|[?&]api_key=)[^&\s\"']+", r"\1[REDACTED]", str(e))
+            err_msg = f"{provider['name']} ({provider.get('model', '?')}): {clean_err}"
             errors.append(err_msg)
             continue
 
     raise RuntimeError(
         "Todos los proveedores LLM fallaron.\n" + "\n".join(f"  - {e}" for e in errors)
     )
+
+
+async def ask_llm(system_prompt: str = "", user_prompt: str = "", **kwargs) -> str:
+    """Wrapper principal con timeout global de 45s."""
+    import asyncio
+    try:
+        return await asyncio.wait_for(
+            _ask_llm_internal(system_prompt, user_prompt, **kwargs),
+            timeout=45.0
+        )
+    except asyncio.TimeoutError:
+        raise RuntimeError("Timeout global superado (45s) en la consulta multi-proveedor LLM.")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -388,7 +402,14 @@ async def generate_skill_from_repo(repo_name: str, description: str, readme: str
     )
     
     # Recortar el readme si es demasiado grande para evitar exceder tokens
-    readme_snippet = readme[:15000] if readme else "Sin README"
+    # Truncar en boundary de linea mas cercana a 15k, no char-count duro
+    if readme:
+        if len(readme) > 15000:
+            readme_snippet = readme[:readme.rfind('\n', 0, 15000)] if '\n' in readme[:15000] else readme[:15000]
+        else:
+            readme_snippet = readme
+    else:
+        readme_snippet = "Sin README"
     
     user_prompt = f"""
 Basado en el repositorio {repo_name}, genera un SKILL.md.
@@ -476,7 +497,7 @@ def _build_offline_audit_report(audit_data: dict, missing_categories: list, stat
     return "\n".join(report_lines)
 
 
-async def audit_project_with_ai(audit_data: dict, missing_categories: list, static_analysis: dict = None) -> str:
+async def audit_project_with_ai(audit_data: dict, missing_categories: list, static_analysis: dict = None, **kwargs) -> str:
     """
     Realiza una auditoría profunda de la arquitectura y el estado del proyecto local.
     Si todo esta perfecto (missing_categories está vacío), devuelve el badge oficial.

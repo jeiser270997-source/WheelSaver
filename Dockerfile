@@ -1,18 +1,17 @@
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
-# Install system dependencies for potential ML/nlp features
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency files first for layer caching
-COPY requirements.txt pyproject.toml ./
-RUN pip install --no-cache-dir -e .
-
-# Copy the rest of the application
+# Copy entire project first (pip install -e . needs source)
 COPY . .
+
+# Install package and dependencies
+RUN pip install --no-cache-dir -e ".[audit]"
 
 # Expose API port
 EXPOSE 8000

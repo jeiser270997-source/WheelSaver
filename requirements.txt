@@ -11,7 +11,6 @@ aiosqlite>=0.19.0
 openai>=1.0.0
 
 # Infrastructure / Architecture
-async-lru>=2.0.0
 slowapi>=0.1.9
 tenacity>=8.2.0
 

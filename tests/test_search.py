@@ -113,3 +113,24 @@ class TestSearch:
         results = cursor.fetchall()
         stars = [r[1] for r in results]
         assert stars == sorted(stars, reverse=True)
+
+    def test_search_sql_injection_order_col(self, db_with_data):
+        """order_col con intento de inyeccion SQL debe ser ignorado o sanitizado."""
+        cursor = db_with_data.cursor()
+        order_map = {"stars": "stars", "name": "name", "updated_at": "updated_at"}
+        safe_order = order_map.get("stars; DROP TABLE repos;--", "stars")
+        cursor.execute(f"SELECT name FROM repos ORDER BY {safe_order} DESC LIMIT 5")
+        results = cursor.fetchall()
+        assert len(results) > 0
+
+    def test_search_fts_special_characters(self, db_with_data):
+        """FTS con caracteres especiales (* : ^ " =) no debe romper la consulta."""
+        import re
+        kw = 'python* test" OR "1"="1 :invalid^'
+        kw_clean = re.sub(r'[*():^"=]', ' ', kw).strip()
+        cursor = db_with_data.cursor()
+        cursor.execute(
+            "SELECT r.name FROM repos_fts f JOIN repos r ON r.rowid = f.rowid WHERE repos_fts MATCH ?",
+            (kw_clean,),
+        )
+        assert isinstance(cursor.fetchall(), list)

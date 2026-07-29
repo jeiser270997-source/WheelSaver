@@ -3,7 +3,9 @@ import shutil
 
 import aiosqlite
 
-DB_PATH = os.path.join(os.path.expanduser("~"), ".wheelsaver", "top_repos.db")
+from scraper.db_manager import get_db_path
+
+DB_PATH = get_db_path()
 
 
 async def get_db():

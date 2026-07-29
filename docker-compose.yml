@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  wheelsaver:
+    build: .
+    container_name: wheelsaver
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - wheelsaver_data:/root/.wheelsaver
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - WHEELSAVER_DB_PATH=/root/.wheelsaver/top_repos.db
+    command: ["python", "cli.py", "api", "--host", "0.0.0.0"]
+
+volumes:
+  wheelsaver_data:

@@ -132,19 +132,23 @@ def scrape_gitstar(start_page=1, max_pages=None):
     return all_repos
 
 
-def main():
+def main(max_pages=None, start_page=1):
     import argparse
+    import sys
 
-    parser = argparse.ArgumentParser(description="Scrapea gitstar-ranking.com")
-    parser.add_argument("--pages", type=int, default=0, help="Paginas (0 = todas)")
-    parser.add_argument("--start", type=int, default=1, help="Pagina inicial")
-    args = parser.parse_args()
+    # Parse CLI args only if called as script (sys.argv has file)
+    if len(sys.argv) > 1 and sys.argv[0].endswith(('.py', '.exe')):
+        parser = argparse.ArgumentParser(description="Scrapea gitstar-ranking.com")
+        parser.add_argument("--pages", type=int, default=0, help="Paginas (0 = todas)")
+        parser.add_argument("--start", type=int, default=1, help="Pagina inicial")
+        args = parser.parse_args()
+        max_pages = args.pages if max_pages is None else max_pages
+        start_page = args.start
 
     logger.info("Scrapeando gitstar-ranking.com")
     antes = get_stats()
 
-    max_pages = args.pages if args.pages > 0 else None
-    todos = scrape_gitstar(start_page=args.start, max_pages=max_pages)
+    todos = scrape_gitstar(start_page=start_page, max_pages=max_pages)
 
     if not todos:
         logger.warning("No se extrajeron repos de gitstar")

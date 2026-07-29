@@ -108,6 +108,24 @@ def build_test_db():
         )
     """)
 
+    # FTS5 triggers incrementales (mismos que init_db en produccion)
+    cursor.executescript("""
+        CREATE TRIGGER IF NOT EXISTS repos_ai AFTER INSERT ON repos BEGIN
+            INSERT INTO repos_fts(rowid, name, description, topics)
+            VALUES (new.rowid, new.name, new.description, new.topics);
+        END;
+        CREATE TRIGGER IF NOT EXISTS repos_ad AFTER DELETE ON repos BEGIN
+            INSERT INTO repos_fts(repos_fts, rowid, name, description, topics)
+            VALUES ('delete', old.rowid, old.name, old.description, old.topics);
+        END;
+        CREATE TRIGGER IF NOT EXISTS repos_au AFTER UPDATE ON repos BEGIN
+            INSERT INTO repos_fts(repos_fts, rowid, name, description, topics)
+            VALUES ('delete', old.rowid, old.name, old.description, old.topics);
+            INSERT INTO repos_fts(rowid, name, description, topics)
+            VALUES (new.rowid, new.name, new.description, new.topics);
+        END;
+    """)
+
     conn.commit()
     return conn
 
@@ -142,6 +160,23 @@ async def build_async_test_db_empty():
             content_rowid='rowid'
         )
     """)
+    # FTS5 triggers incrementales (mismos que init_db)
+    await db.executescript("""
+        CREATE TRIGGER IF NOT EXISTS repos_ai AFTER INSERT ON repos BEGIN
+            INSERT INTO repos_fts(rowid, name, description, topics)
+            VALUES (new.rowid, new.name, new.description, new.topics);
+        END;
+        CREATE TRIGGER IF NOT EXISTS repos_ad AFTER DELETE ON repos BEGIN
+            INSERT INTO repos_fts(repos_fts, rowid, name, description, topics)
+            VALUES ('delete', old.rowid, old.name, old.description, old.topics);
+        END;
+        CREATE TRIGGER IF NOT EXISTS repos_au AFTER UPDATE ON repos BEGIN
+            INSERT INTO repos_fts(repos_fts, rowid, name, description, topics)
+            VALUES ('delete', old.rowid, old.name, old.description, old.topics);
+            INSERT INTO repos_fts(rowid, name, description, topics)
+            VALUES (new.rowid, new.name, new.description, new.topics);
+        END;
+    """)
     await db.commit()
     return db
 
@@ -166,8 +201,6 @@ async def build_async_test_db():
                 repo["updated_at"],
             ),
         )
-    await db.commit()
-    await db.execute("INSERT INTO repos_fts(repos_fts) VALUES('rebuild')")
     await db.commit()
     return db
 
@@ -201,9 +234,6 @@ def db_with_data(db_conn):
                 repo["updated_at"],
             ),
         )
-    db_conn.commit()
-    # Reconstruir indice FTS5
-    cursor.execute("INSERT INTO repos_fts(repos_fts) VALUES('rebuild')")
     db_conn.commit()
     return db_conn
 

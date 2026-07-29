@@ -28,6 +28,10 @@ Requires-Dist: pytest-cov; extra == "dev"
 Requires-Dist: pytest-playwright; extra == "dev"
 Requires-Dist: black; extra == "dev"
 Requires-Dist: ruff; extra == "dev"
+Provides-Extra: audit
+Requires-Dist: bandit>=1.7.0; extra == "audit"
+Requires-Dist: vulture>=2.11; extra == "audit"
+Requires-Dist: radon>=6.0.0; extra == "audit"
 
 # 🛞 WheelSaver
 
@@ -39,21 +43,24 @@ Incluye skills nativos para Claude Code que auditan tus proyectos y te recomiend
 librerias existentes, evitando que codees desde cero lo que ya esta resuelto.
 
 ```
-📦 23,621 repos · 🌐 142 lenguajes · ⚡ Busqueda FTS5 en milisegundos
+📦 25,411 repos · 🌐 149 lenguajes · ⚡ Búsqueda FTS5 en milisegundos
 ```
 
 ## Componentes
 
-| Componente | Que hace |
+| Componente | Qué hace |
 |---|---|
 | **3 Scrapers** | GitHub GraphQL API + EvanLi/Github-Ranking + gitstar-ranking.com |
-| **Base de datos** | SQLite + FTS5, actualizacion semanal via GitHub Actions |
-| **CLI unificado** | 11 comandos con Typer + Rich (tablas, colores, autocompletado) |
+| **Base de datos** | SQLite + FTS5, actualización local programada a la 1:00 AM |
+| **CLI unificado** | 12 comandos con Typer + Rich (tablas, colores, autocompletado UTF-8) |
 | **API REST** | FastAPI con 9+ endpoints + Swagger en `/docs` |
-| **3 Skills IA** | `wheel_saver` `wheel-ready` `wheel-swap` para Claude Code |
+| **3 Skills IA** | `wheel_saver` `wheel-ready` `wheel-swap` para Claude Code / Gemini / Antigravity |
+| **Análisis estático** | `wheelsaver audit-code` ejecuta bandit + vulture + radon |
+| **Ejecución Local** | 100% autónomo local (sin dependencias en la nube ni CI externos) |
 | **Docker** | Dockerfile para despliegue en contenedor |
 
-## Inicio rapido
+
+## Inicio rápido
 
 ```bash
 # 1. Instalar dependencias
@@ -63,16 +70,28 @@ pip install -e .
 echo "GITHUB_TOKEN=ghp_tu_token_aqui" > .env
 
 # 3a. Usar el CLI directamente
-wheelsaver stats                          # Estadisticas de la BD
+wheelsaver stats                          # Estadísticas de la BD
 wheelsaver search fastapi pytest          # Buscar repos por keyword
 wheelsaver swap "pdf parser"              # Buscar alternativas
 wheelsaver ready                          # Checklist del proyecto
+wheelsaver audit-code .                   # Auditoría de seguridad y calidad
 
 # 3b. Lanzar API REST
 wheelsaver api                            # → http://localhost:8000/docs
 ```
 
-## Skills para Claude Code
+## Programación de Actualización Local (Windows / Linux)
+
+Para actualizar la BD local automáticamente 2 veces por semana a la 1:00 AM (sin interrumpir tu jornada laboral):
+
+### Windows (PowerShell):
+```powershell
+$Action = New-ScheduledTaskAction -Execute "wheelsaver" -Argument "scrape --min-stars 500"
+$Trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Tuesday,Friday -At "01:00AM"
+Register-ScheduledTask -TaskName "WheelSaver_AutoScrape" -Action $Action -Trigger $Trigger -Description "Actualización automática de BD WheelSaver los martes y viernes a la 1:00 AM"
+```
+
+## Skills para IA (Claude Code / Antigravity)
 
 Instala las rueditas de entrenamiento en cualquier proyecto:
 
@@ -80,34 +99,36 @@ Instala las rueditas de entrenamiento en cualquier proyecto:
 .\Instalar-WheelSaver.ps1
 ```
 
-Luego abre `claude` y usa:
+Luego abre la IA en cualquier proyecto y usa:
 
-| Comando | Que hace |
+| Comando | Qué hace |
 |---|---|
-| `Audita este proyecto con WheelSaver` | Auditoria completa con matriz de scoring |
+| `Audita este proyecto con WheelSaver` | Auditoría completa con matriz de scoring |
 | `wheel-ready` | Checklist de lo que le falta al proyecto |
-| `wheel-swap parser de PDF` | Busca si ya existe una libreria para lo que codeas |
+| `wheel-swap parser de PDF` | Busca si ya existe una librería para lo que codeas |
 
 ## Arquitectura
 
 ```
 WheelSaver/
-├── cli.py                    # CLI unificado (Typer + Rich)
-├── api/main.py               # API REST FastAPI
+├── cli.py                    # CLI unificado (Typer + Rich con soporte UTF-8)
+├── api/main.py               # API REST FastAPI + Web UI estática
+├── api/llm.py                # Failover Multi-LLM (Groq, Cerebras, Gemini, OpenRouter, etc.)
 ├── scraper/
 │   ├── github_fetcher.py     # Scraper GraphQL (httpx)
-│   └── db_manager.py         # ORM SQLite + FTS5
+│   └── db_manager.py         # ORM SQLite + FTS5 + Live Fallback API
 ├── scripts/
 │   ├── import_from_evanli.py # Importador EvanLi
 │   └── scrape_gitstar_ranking.py  # Scraper gitstar-ranking
 ├── services/
-│   └── project_auditor.py    # Detector de stack del proyecto
+│   ├── project_auditor.py    # Detector modular de stack del proyecto
+│   └── static_analyzer.py    # Análisis estático (bandit + vulture + radon)
 ├── .agents/skills/
-│   ├── wheel_saver/          # Skill: auditoria completa
+│   ├── wheel_saver/          # Skill: auditoría completa
 │   ├── wheel-ready/          # Skill: checklist de proyecto
 │   └── wheel-swap/           # Skill: busca alternativas
-├── frontend/                 # UI web (HTML + CSS + JS)
-├── tests/                    # Tests con pytest
+├── frontend/                 # UI web (HTML + CSS + JS dinámico)
+├── tests/                    # 33 tests con pytest + Playwright E2E
 ├── Dockerfile                # Contenedor Python slim
 └── pyproject.toml            # Config del proyecto
 ```
@@ -115,26 +136,21 @@ WheelSaver/
 ## Comandos del CLI
 
 ```bash
-wheelsaver search <keywords>   # Busqueda FTS5 con Rich Table
-wheelsaver stats               # Estadisticas con Panels
+wheelsaver search <keywords>   # Búsqueda FTS5 con Rich Table
+wheelsaver stats               # Estadísticas con Panels
 wheelsaver scrape              # Scraper GraphQL desde Top 1
 wheelsaver import evanli       # Importar EvanLi
 wheelsaver import gitstar      # Importar gitstar-ranking
 wheelsaver api                 # Lanzar API REST
 wheelsaver docker              # Levantar en Docker
-wheelsaver ready               # Checklist del proyecto
+wheelsaver ready               # Checklist + análisis estático del proyecto
+wheelsaver audit-code <ruta>   # Seguridad, código muerto y complejidad
 wheelsaver swap <feature>      # Buscar alternativas
 wheelsaver skillify <repo>     # Convertir repo en skill de IA
 wheelsaver ask <pregunta>      # Consultar a la IA con RAG
 ```
 
-## Configuracion en GitHub
-
-Para actualizacion automatica semanal:
-1. sube el codigo a GitHub
-2. Ve a `Settings` > `Secrets and variables` > `Actions`
-3. Anade un secreto llamado `PAT_GITHUB_TOKEN` con tu token de GitHub
-
 ---
 
 > Hecho con 🛞 para no reinventar la rueda.
+

@@ -7,10 +7,19 @@ from playwright.sync_api import Page
 
 from api.main import app
 
+import socket
+
+def get_free_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('127.0.0.1', 0))
+        return s.getsockname()[1]
+
+TEST_PORT = get_free_port()
+
 class ServerThread(threading.Thread):
     def __init__(self):
         super().__init__(daemon=True)
-        self.server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=8008, log_level="error"))
+        self.server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=TEST_PORT, log_level="error"))
 
     def run(self):
         self.server.run()
@@ -26,7 +35,7 @@ def start_server():
     # Wait for the server to be healthy
     for _ in range(30):
         try:
-            resp = httpx.get("http://127.0.0.1:8008/health")
+            resp = httpx.get(f"http://127.0.0.1:{TEST_PORT}/health")
             if resp.status_code == 200:
                 break
         except Exception:
@@ -38,7 +47,7 @@ def start_server():
 
 def test_homepage_loads(page: Page):
     """Prueba que el frontend cargue y muestre WheelSaver."""
-    page.goto("http://127.0.0.1:8008/web/index.html")
+    page.goto(f"http://127.0.0.1:{TEST_PORT}/web/index.html")
     
     # Verificar titulo de la pagina
     assert "WheelSaver" in page.title()
@@ -49,7 +58,7 @@ def test_homepage_loads(page: Page):
 
 def test_search_ui_interaction(page: Page):
     """Prueba una interaccion basica en el frontend."""
-    page.goto("http://127.0.0.1:8008/web/index.html")
+    page.goto(f"http://127.0.0.1:{TEST_PORT}/web/index.html")
     
     search_input = page.locator("input#input-q")
     search_input.fill("test")

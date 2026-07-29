@@ -12,10 +12,13 @@
 </head>
 <body>
     <header class="header">
-        <div class="brand">
-            <span>🛞</span> WheelSaver
+        <div class="brand" role="heading" aria-level="1">
+            <span aria-hidden="true">🛞</span> WheelSaver
         </div>
-        <button class="btn" id="btn-scrape" data-testid="trigger-scrape-btn">Actualizar DB (Scrape)</button>
+        <button class="btn" id="btn-scrape" data-testid="trigger-scrape-btn" aria-label="Actualizar base de datos ejecutando scraper">
+            <span id="btn-scrape-text">Actualizar DB (Scrape)</span>
+            <span id="btn-scrape-spinner" class="hide" aria-hidden="true">⏳</span>
+        </button>
     </header>
 
     <main>
@@ -42,9 +45,9 @@
         <!-- Search -->
         <section class="search-section">
             <form id="search-form" class="search-box glass" data-testid="search-form">
-                <input type="text" id="input-q" placeholder="¿Qué buscas? ej: fastapi, react, auth" data-testid="search-input-q" required>
-                <input type="text" id="input-lang" placeholder="Lenguaje (opcional)" data-testid="search-input-lang">
-                <input type="number" id="input-limit" placeholder="Límite" value="10" min="1" max="100" style="flex: 0.3; min-width: 80px;" data-testid="search-input-limit">
+                <input type="text" id="input-q" placeholder="¿Qué buscas? ej: fastapi, react, auth" aria-label="Término de búsqueda" data-testid="search-input-q" required>
+                <input type="text" id="input-lang" placeholder="Lenguaje (opcional)" aria-label="Filtrar por lenguaje" data-testid="search-input-lang">
+                <input type="number" id="input-limit" placeholder="Límite" value="10" min="1" max="100" aria-label="Límite de resultados" style="flex: 0.3; min-width: 80px;" data-testid="search-input-limit">
                 <button type="submit" class="btn" data-testid="search-submit-btn">Buscar</button>
             </form>
         </section>
@@ -104,7 +107,7 @@
     </main>
 
     <!-- Toast Container -->
-    <div id="toast-container" data-testid="toast-container"></div>
+    <div id="toast-container" data-testid="toast-container" aria-live="polite"></div>
 
     <script src="app.js"></script>
 </body>

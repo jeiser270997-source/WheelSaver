@@ -13,6 +13,9 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("btn-scrape").addEventListener("click", () => {
         triggerScrape();
     });
+    
+    // Stats skeleton loading
+    showStatsLoading();
 });
 
 // Toast System
@@ -20,6 +23,9 @@ function showToast(message, type = "success") {
     const container = document.getElementById("toast-container");
     const toast = document.createElement("div");
     toast.className = `toast ${type}`;
+    
+    // Set ARIA role based on type: alert for errors, status for info/success
+    toast.setAttribute("role", type === "error" ? "alert" : "status");
     
     const icon = type === "success" ? "✅" : "❌";
     toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
@@ -35,6 +41,17 @@ function showToast(message, type = "success") {
     }, 4000);
 }
 
+// Show skeleton state for stat cards
+function showStatsLoading() {
+    const statIds = ["stat-repos", "stat-langs", "stat-max", "stat-avg"];
+    statIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.textContent === "-") {
+            el.innerHTML = `<div class="skeleton sk-badge" style="height:2rem;width:80px"></div>`;
+        }
+    });
+}
+
 async function loadStats() {
     try {
         const res = await fetch(`${API_BASE}/stats`);
@@ -46,6 +63,12 @@ async function loadStats() {
         document.getElementById("stat-max").textContent = stats.stars_max.toLocaleString();
         document.getElementById("stat-avg").textContent = Math.round(stats.stars_avg).toLocaleString();
     } catch (err) {
+        // Clear skeletons if they exist
+        const statIds = ["stat-repos", "stat-langs", "stat-max", "stat-avg"];
+        statIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el && el.children.length > 0) el.textContent = "-";
+        });
         showToast("Error al cargar estadísticas: " + err.message, "error");
         console.error("Stats Error:", err);
     }
@@ -120,6 +143,17 @@ async function performSearch() {
 }
 
 async function triggerScrape() {
+    const btn = document.getElementById("btn-scrape");
+    const btnText = document.getElementById("btn-scrape-text");
+    const btnSpinner = document.getElementById("btn-scrape-spinner");
+    
+    // Disable button + show spinner
+    btn.disabled = true;
+    btn.style.opacity = "0.7";
+    btnText.classList.add("hide");
+    btnSpinner.classList.remove("hide");
+    btn.setAttribute("aria-busy", "true");
+    
     try {
         showToast("Iniciando scraper en background...", "success");
         const res = await fetch(`${API_BASE}/scrape?min_stars=500`, { method: "POST" });
@@ -128,5 +162,12 @@ async function triggerScrape() {
         showToast(data.message, "success");
     } catch(err) {
         showToast(err.message, "error");
+    } finally {
+        // Re-enable button
+        btn.disabled = false;
+        btn.style.opacity = "1";
+        btnText.classList.remove("hide");
+        btnSpinner.classList.add("hide");
+        btn.removeAttribute("aria-busy");
     }
 }

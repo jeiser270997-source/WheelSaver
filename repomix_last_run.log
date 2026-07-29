@@ -1,0 +1,37 @@
+[2m
+📦 Repomix v1.16.1
+[22m
+[2mNo custom config found at repomix.config.ts, repomix.config.mts, repomix.config.cts, repomix.config.js, repomix.config.mjs, repomix.config.cjs, repomix.config.json5, repomix.config.jsonc, repomix.config.json or global config at C:\Users\dev\AppData\Local\Repomix\repomix.config.ts, C:\Users\dev\AppData\Local\Repomix\repomix.config.mts, C:\Users\dev\AppData\Local\Repomix\repomix.config.cts, C:\Users\dev\AppData\Local\Repomix\repomix.config.js, C:\Users\dev\AppData\Local\Repomix\repomix.config.mjs, C:\Users\dev\AppData\Local\Repomix\repomix.config.cjs, C:\Users\dev\AppData\Local\Repomix\repomix.config.json5, C:\Users\dev\AppData\Local\Repomix\repomix.config.jsonc, C:\Users\dev\AppData\Local\Repomix\repomix.config.json.
+You can add a config file for additional settings. Please check https://github.com/yamadashy/repomix for more information.[22m
+[K[?25l⠋ Initializing...
+[K[1A[K[?25l⠙ Searching for files...
+[K[1A[K[?25l⠹ Processing file... (46/46) [2mwheelsaver_audit_WheelSaver.md[22m
+[K[1A[K[?25l⠸ Generating output...
+[K[1A[K[?25l⠼ Writing output files...
+[K[1A[K[?25l✔ Packing completed successfully!
+[?25h
+📈 Top 5 Files by Token Count:
+[2m──────────────────────────────[22m
+1.  cli.py [2m(5,016 tokens, 18,052 chars, 8.5%)[22m
+2.  api/llm.py [2m(4,978 tokens, 18,348 chars, 8.5%)[22m
+3.  scraper/db_manager.py [2m(3,967 tokens, 15,457 chars, 6.8%)[22m
+4.  api/repository.py [2m(3,064 tokens, 11,792 chars, 5.2%)[22m
+5.  .agents/skills/wheel_saver/SKILL.md [2m(2,796 tokens, 9,203 chars, 4.8%)[22m
+
+🔎 Security Check:
+[2m──────────────────[22m
+[32m✔[39m No suspicious files detected.
+
+
+📊 Pack Summary:
+[2m────────────────[22m
+  Total Files: 46 files
+ Total Tokens: 58,754 tokens
+  Total Chars: 204,187 chars
+       Output: repomix_parts\parte.1.md [2m…[22m repomix_parts\parte.1.md [2m(1 parts)[22m
+     Security: ✔ No suspicious files detected
+
+[32m🎉 All Done![39m
+Your repository has been successfully packed.
+
+💡 Repomix is now available in your browser! Try it at [4mhttps://repomix.com[24m
