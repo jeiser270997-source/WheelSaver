@@ -30,6 +30,13 @@ def make_repo_id(owner, name):
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
+def escape_fts_query(kw: str) -> str:
+    """Escapa comillas dobles internas y remueve operadores especiales de FTS5."""
+    import re
+    kw_clean = re.sub(r'[*():^"=]', ' ', str(kw))
+    return kw_clean.strip()
+
+
 _DB_INITIALIZED = False
 
 def init_db():
@@ -207,8 +214,8 @@ def upsert_external_repos(repos_list, conn=None):
 
 def search_repos(keyword, limit=5, conn=None):
     """
-    Busca repos usando FTS5 (full-text search).
-    Si FTS5 falla (poco probable), hace fallback a LIKE.
+    Busca repos por keyword usando FTS5 (full-text search).
+    Fallback a LIKE si FTS5 falla o no retorna nada.
     """
     owns_conn = False
     if conn is None:
@@ -218,6 +225,7 @@ def search_repos(keyword, limit=5, conn=None):
         cursor = conn.cursor()
 
         try:
+            safe_kw = escape_fts_query(keyword)
             cursor.execute(
                 """
                 SELECT r.name, r.owner, r.description, r.url, r.stars, r.language, r.topics
@@ -227,7 +235,7 @@ def search_repos(keyword, limit=5, conn=None):
                 ORDER BY r.stars DESC
                 LIMIT ?
             """,
-                (keyword, limit),
+                (f'"{safe_kw}"' if safe_kw else "", limit),
             )
         except sqlite3.OperationalError:
             # Fallback: LIKE query
@@ -308,7 +316,7 @@ def search_repos_multi_keywords(keywords, limit=20, conn=None):
         cursor = conn.cursor()
 
         try:
-            fts_query = " OR ".join(f'"{kw.replace(chr(34), chr(34)+chr(34))}"' for kw in keywords)
+            fts_query = " OR ".join(f'"{escape_fts_query(kw)}"' for kw in keywords if escape_fts_query(kw))
             cursor.execute(
                 """
                 SELECT DISTINCT r.name, r.owner, r.description, r.url, r.stars, r.language, r.topics

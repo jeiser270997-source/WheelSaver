@@ -2,12 +2,13 @@ import logging
 import os
 
 import aiosqlite
-import httpx
+from scraper.db_manager import escape_fts_query
 
 
 async def search_repos_async(db: aiosqlite.Connection, keyword: str, limit: int = 5):
     """Busqueda vectorial/full-text en SQLite (FTS5 + fallback LIKE)."""
     try:
+        safe_kw = escape_fts_query(keyword)
         cursor = await db.execute(
             """
             SELECT r.name, r.owner, r.description, r.url, r.stars, r.language, r.topics
@@ -17,7 +18,7 @@ async def search_repos_async(db: aiosqlite.Connection, keyword: str, limit: int 
             ORDER BY rank
             LIMIT ?
             """,
-            (keyword, limit),
+            (f'"{safe_kw}"' if safe_kw else "", limit),
         )
         results = await cursor.fetchall()
 
@@ -47,12 +48,7 @@ async def search_repos_multi_keywords_async(
     if not keywords:
         return []
 
-    def _esc_fts(kw: str) -> str:
-        """Escapa comillas dobles internas y remueve operadores especiales de FTS5."""
-        import re
-        kw_clean = re.sub(r'[*():^"=]', ' ', kw)
-        return kw_clean.strip()
-    fts_query_and = " AND ".join(f'"{_esc_fts(kw)}"' for kw in keywords)
+    fts_query_and = " AND ".join(f'"{escape_fts_query(kw)}"' for kw in keywords if escape_fts_query(kw))
 
     try:
         cursor = await db.execute(
@@ -72,7 +68,7 @@ async def search_repos_multi_keywords_async(
             results_list = [dict(r) for r in results]
             seen = {r["name"] for r in results_list}
 
-            fts_query_or = " OR ".join(f'"{_esc_fts(kw)}"' for kw in keywords)
+            fts_query_or = " OR ".join(f'"{escape_fts_query(kw)}"' for kw in keywords if escape_fts_query(kw))
             cursor = await db.execute(
                 """
                 SELECT r.name, r.owner, r.description, r.url, r.stars, r.language, r.topics
