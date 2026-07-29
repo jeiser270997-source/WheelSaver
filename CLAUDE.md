@@ -32,6 +32,7 @@ para busquedas ultrarrápidas y offline.
 - `tests/`: 80+ tests con pytest + BD in-memory + Playwright E2E + GitHub Actions CI (`.github/workflows/test.yml`).
 
 ## Reglas de Desarrollo
+- **PROYECTO FINALIZADO OFICIALMENTE**: El código está congelado. Para modificar o editar cualquier archivo del proyecto, DEBES pedir DOBLE VERIFICACIÓN EXPLÍCITA al usuario antes de tocar código.
 - Ejecución 100% local y autónoma (sin dependencias de GitHub Actions ni CI externos).
 - No usar ORMs pesados (SQLAlchemy), mantener SQLite nativo con WAL + FTS5.
 - Siempre manejar los rate-limits de la API de GitHub y fallback offline.
