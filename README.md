@@ -8,7 +8,7 @@ Incluye skills nativos para Claude Code que auditan tus proyectos y te recomiend
 librerias existentes, evitando que codees desde cero lo que ya esta resuelto.
 
 ```
-📦 25,411 repos · 🌐 149 lenguajes · ⚡ Búsqueda FTS5 en milisegundos · 🛡️ v3.3.1
+📦 25,411 repos · 🌐 149 lenguajes · ⚡ Búsqueda FTS5 en milisegundos · 🛡️ v3.3.1 (commit dfa9bca)
 ```
 
 ## Componentes
