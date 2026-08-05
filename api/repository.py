@@ -2,6 +2,8 @@ import logging
 import os
 
 import aiosqlite
+import httpx
+
 from scraper.db_manager import escape_fts_query
 
 
@@ -41,9 +43,7 @@ async def search_repos_async(db: aiosqlite.Connection, keyword: str, limit: int 
         return []
 
 
-async def search_repos_multi_keywords_async(
-    db: aiosqlite.Connection, keywords: list[str], limit: int = 5
-):
+async def search_repos_multi_keywords_async(db: aiosqlite.Connection, keywords: list[str], limit: int = 5):
     """Busqueda con multiples keywords en FTS5 (AND) con fallback individual (OR)."""
     if not keywords:
         return []
@@ -107,17 +107,13 @@ async def get_stats_async(db: aiosqlite.Connection):
     row = await cursor.fetchone()
     stats["total_repos"] = row["count"]
 
-    cursor = await db.execute(
-        "SELECT MIN(stars) as min_s, MAX(stars) as max_s, AVG(stars) as avg_s FROM repos"
-    )
+    cursor = await db.execute("SELECT MIN(stars) as min_s, MAX(stars) as max_s, AVG(stars) as avg_s FROM repos")
     row = await cursor.fetchone()
     stats["stars_min"] = row["min_s"]
     stats["stars_max"] = row["max_s"]
     stats["stars_avg"] = round(row["avg_s"]) if row["avg_s"] else 0
 
-    cursor = await db.execute(
-        'SELECT COUNT(DISTINCT language) as cnt FROM repos WHERE language IS NOT NULL AND language != ""'
-    )
+    cursor = await db.execute('SELECT COUNT(DISTINCT language) as cnt FROM repos WHERE language IS NOT NULL AND language != ""')
     row = await cursor.fetchone()
     stats["languages"] = row["cnt"]
 
@@ -151,9 +147,7 @@ async def get_languages_async(db: aiosqlite.Connection, min_repos: int, limit: i
     return [{"language": r["language"], "repos": r["count"]} for r in langs]
 
 
-async def list_repos_async(
-    db: aiosqlite.Connection, order_col: str, language: str, per_page: int, offset: int
-):
+async def list_repos_async(db: aiosqlite.Connection, order_col: str, language: str, per_page: int, offset: int):
     query_base = "SELECT * FROM repos"
     params: list[str | int] = []
 
@@ -174,7 +168,6 @@ async def list_repos_async(
     return [dict(r) for r in repos]
 
 
-
 async def get_top_async(db: aiosqlite.Connection, limit: int, language: str):
     if language:
         cursor = await db.execute(
@@ -190,9 +183,7 @@ async def get_top_async(db: aiosqlite.Connection, limit: int, language: str):
     return [dict(r) for r in repos]
 
 
-async def _fetch_live_github_async(
-    db: aiosqlite.Connection, query: str, limit: int = 20
-) -> list[dict]:
+async def _fetch_live_github_async(db: aiosqlite.Connection, query: str, limit: int = 20) -> list[dict]:
     """
     Version asincrona de live fallback. Consulta la API REST de GitHub
     cuando la BD local no tiene resultados. Persiste en BD local.

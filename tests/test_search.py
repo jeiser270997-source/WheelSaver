@@ -125,7 +125,8 @@ class TestSearch:
 
     def test_search_fts_special_characters(self, db_with_data):
         """FTS con caracteres especiales (* : ^ " =) no debe romper la consulta."""
-        from scraper.db_manager import escape_fts_query, search_repos
+        from scraper.db_manager import search_repos
+
         kw = 'python* test" OR "1"="1 :invalid^'
         results = search_repos(kw, limit=5, conn=db_with_data)
         assert isinstance(results, list)
@@ -133,4 +134,5 @@ class TestSearch:
     def test_escape_fts_query_removes_all_operators(self):
         """escape_fts_query remueve exactamente todos los operadores FTS5."""
         from scraper.db_manager import escape_fts_query
-        assert escape_fts_query('fastapi* OR (flask): "test"^ =1') == 'fastapi  OR  flask    test    1'
+
+        assert escape_fts_query('fastapi* OR (flask): "test"^ =1') == "fastapi  OR  flask    test    1"

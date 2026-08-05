@@ -13,6 +13,7 @@ Para agregar un nuevo proveedor:
 import json
 import os
 import re
+from collections import OrderedDict
 
 import httpx
 from dotenv import load_dotenv
@@ -168,9 +169,7 @@ Por favor, analiza estos repositorios y responde a la pregunta de la mejor maner
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-async def _ask_openai_compatible(
-    provider: dict, system_prompt: str, user_prompt: str, **kwargs
-) -> str:
+async def _ask_openai_compatible(provider: dict, system_prompt: str, user_prompt: str, **kwargs) -> str:
     """Consulta a un proveedor con API compatible con OpenAI."""
     client = AsyncOpenAI(
         api_key=provider["api_key"],
@@ -192,10 +191,7 @@ async def _ask_openai_compatible(
 async def _ask_google(provider: dict, system_prompt: str, user_prompt: str, **kwargs) -> str:
     """Consulta a Google Gemini API vía REST."""
     model = kwargs.get("model", provider["model"])
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/{model}"
-        f":generateContent?key={provider['api_key']}"
-    )
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={provider['api_key']}"
 
     payload = {
         "contents": [{"parts": [{"text": f"{system_prompt}\n\n{user_prompt}"}]}],
@@ -215,9 +211,7 @@ async def _ask_google(provider: dict, system_prompt: str, user_prompt: str, **kw
             # Incluir info de bloqueo de seguridad si existe
             block_reason = data.get("promptFeedback", {}).get("blockReason", "desconocido")
             raise RuntimeError(
-                f"Google Gemini: respuesta vacía o bloqueada. "
-                f"blockReason={block_reason}. "
-                f"Respuesta completa: {json.dumps(data, indent=2)[:500]}"
+                f"Google Gemini: respuesta vacía o bloqueada. blockReason={block_reason}. Respuesta completa: {json.dumps(data, indent=2)[:500]}"
             ) from e
 
 
@@ -266,11 +260,7 @@ _NATIVE_HANDLERS = {
 }
 
 
-@retry(
-    stop=stop_after_attempt(2),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    reraise=True
-)
+@retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
 async def _call_handler(handler, provider, system_prompt, user_prompt, **kwargs):
     """Wrapper con retry para cada call individual a un proveedor.
     Separado de ask_llm para que @retry NO envuelva el failover chain completo.
@@ -278,11 +268,14 @@ async def _call_handler(handler, provider, system_prompt, user_prompt, **kwargs)
     return await handler(provider, system_prompt, user_prompt, **kwargs)
 
 
-_RESPONSE_CACHE = {}
+_RESPONSE_CACHE: OrderedDict[tuple, str] = OrderedDict()
+_RESPONSE_CACHE_MAX = 500
+
 
 async def _ask_llm_internal(system_prompt: str = "", user_prompt: str = "", **kwargs) -> str:
     cache_key = (system_prompt, user_prompt)
     if cache_key in _RESPONSE_CACHE:
+        _RESPONSE_CACHE.move_to_end(cache_key)
         return _RESPONSE_CACHE[cache_key]
 
     providers = _get_active_providers()
@@ -300,12 +293,16 @@ async def _ask_llm_internal(system_prompt: str = "", user_prompt: str = "", **kw
                 handler = _OPENAI_HANDLERS.get(provider["name"], _ask_openai_compatible)
                 res = await _call_handler(handler, provider, system_prompt, user_prompt, **kwargs)
                 _RESPONSE_CACHE[cache_key] = res
+                if len(_RESPONSE_CACHE) > _RESPONSE_CACHE_MAX:
+                    _RESPONSE_CACHE.popitem(last=False)
                 return res
             else:  # native
                 handler = _NATIVE_HANDLERS.get(provider["name"])
                 if handler:
                     res = await _call_handler(handler, provider, system_prompt, user_prompt, **kwargs)
                     _RESPONSE_CACHE[cache_key] = res
+                    if len(_RESPONSE_CACHE) > _RESPONSE_CACHE_MAX:
+                        _RESPONSE_CACHE.popitem(last=False)
                     return res
                 else:
                     errors.append(f"{provider['name']}: handler desconocido")
@@ -316,19 +313,15 @@ async def _ask_llm_internal(system_prompt: str = "", user_prompt: str = "", **kw
             errors.append(err_msg)
             continue
 
-    raise RuntimeError(
-        "Todos los proveedores LLM fallaron.\n" + "\n".join(f"  - {e}" for e in errors)
-    )
+    raise RuntimeError("Todos los proveedores LLM fallaron.\n" + "\n".join(f"  - {e}" for e in errors))
 
 
 async def ask_llm(system_prompt: str = "", user_prompt: str = "", **kwargs) -> str:
     """Wrapper principal con timeout global de 45s."""
     import asyncio
+
     try:
-        return await asyncio.wait_for(
-            _ask_llm_internal(system_prompt, user_prompt, **kwargs),
-            timeout=45.0
-        )
+        return await asyncio.wait_for(_ask_llm_internal(system_prompt, user_prompt, **kwargs), timeout=45.0)
     except asyncio.TimeoutError:
         raise RuntimeError("Timeout global superado (45s) en la consulta multi-proveedor LLM.")
 
@@ -367,9 +360,10 @@ ask_deepseek_about_repos = ask_llm_about_repos
 # Funciones adicionales (Smart Search & Skillify)
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 async def expand_search_query(question: str) -> list[str]:
     """
-    Toma una pregunta natural del usuario y usa el LLM para extraer keywords 
+    Toma una pregunta natural del usuario y usa el LLM para extraer keywords
     técnicas exactas que puedan coincidir en GitHub.
     """
     sys_prompt = (
@@ -378,7 +372,7 @@ async def expand_search_query(question: str) -> list[str]:
         "para este propósito usaría. Responde SÓLO con las palabras clave separadas por comas. "
         "No des explicaciones."
     )
-    
+
     try:
         # Usamos temperature=0.0 para consistencia
         resp = await ask_llm(system_prompt=sys_prompt, user_prompt=question, temperature=0.0)
@@ -400,17 +394,17 @@ async def generate_skill_from_repo(repo_name: str, description: str, readme: str
         "El agente necesita saber cómo usar este repositorio de GitHub en el proyecto del usuario. "
         "Genera el contenido de un archivo SKILL.md."
     )
-    
+
     # Recortar el readme si es demasiado grande para evitar exceder tokens
     # Truncar en boundary de linea mas cercana a 15k, no char-count duro
     if readme:
         if len(readme) > 15000:
-            readme_snippet = readme[:readme.rfind('\n', 0, 15000)] if '\n' in readme[:15000] else readme[:15000]
+            readme_snippet = readme[: readme.rfind("\n", 0, 15000)] if "\n" in readme[:15000] else readme[:15000]
         else:
             readme_snippet = readme
     else:
         readme_snippet = "Sin README"
-    
+
     user_prompt = f"""
 Basado en el repositorio {repo_name}, genera un SKILL.md.
 Descripción: {description}
@@ -454,7 +448,7 @@ def _build_static_analysis_summary(static_analysis: dict) -> str:
         if top:
             static_parts.append("Top hallazgos:")
             for f in top:
-                static_parts.append(f"  - {f.get('file','')}:{f.get('line','')} [{f.get('severity','')}] {f.get('issue','')[:100]}")
+                static_parts.append(f"  - {f.get('file', '')}:{f.get('line', '')} [{f.get('severity', '')}] {f.get('issue', '')[:100]}")
 
     if dc.get("available"):
         total = dc.get("total_findings", 0)
@@ -487,13 +481,19 @@ def _build_offline_audit_report(audit_data: dict, missing_categories: list, stat
         report_lines.append("**Resultados de Análisis Estático Local (Bandit + Vulture + Radon):**")
         if sec.get("available"):
             sev = sec.get("by_severity", {})
-            report_lines.append(f"- 🔐 **Seguridad (bandit)**: {sec.get('total_findings', 0)} hallazgos (HIGH: {sev.get('HIGH',0)}, MEDIUM: {sev.get('MEDIUM',0)}, LOW: {sev.get('LOW',0)})")
+            report_lines.append(
+                f"- 🔐 **Seguridad (bandit)**: {sec.get('total_findings', 0)} hallazgos (HIGH: {sev.get('HIGH', 0)}, MEDIUM: {sev.get('MEDIUM', 0)}, LOW: {sev.get('LOW', 0)})"
+            )
         if dc.get("available"):
             report_lines.append(f"- 🧹 **Código Muerto (vulture)**: {dc.get('total_findings', 0)} variables/funciones sin uso")
         if cx.get("available"):
-            report_lines.append(f"- ⚡ **Complejidad (radon)**: {cx.get('high_complexity_count', 0)} funciones con alta complejidad ciclomática (rango D/E/F)")
+            report_lines.append(
+                f"- ⚡ **Complejidad (radon)**: {cx.get('high_complexity_count', 0)} funciones con alta complejidad ciclomática (rango D/E/F)"
+            )
 
-    report_lines.append("\n[dim]Nota: Para profundizar con RAG multi-proveedor, configura una API key en tu .env (GROQ_API_KEY, GOOGLE_API_KEY, etc.)[/dim]")
+    report_lines.append(
+        "\n[dim]Nota: Para profundizar con RAG multi-proveedor, configura una API key en tu .env (GROQ_API_KEY, GOOGLE_API_KEY, etc.)[/dim]"
+    )
     return "\n".join(report_lines)
 
 
@@ -516,11 +516,11 @@ async def audit_project_with_ai(audit_data: dict, missing_categories: list, stat
     static_str = _build_static_analysis_summary(static_analysis)
 
     user_prompt = f"""He auditado este proyecto localmente.
-Stack: {audit_data['stack_str']}
-Framework: {audit_data['framework']}
+Stack: {audit_data["stack_str"]}
+Framework: {audit_data["framework"]}
 
 Faltan los siguientes componentes críticos:
-{missing_str if missing_str else '(Ninguno — todos los checks básicos están cubiertos)'}
+{missing_str if missing_str else "(Ninguno — todos los checks básicos están cubiertos)"}
 {static_str}
 
 Dame un informe de Auditoría Profunda indicando el impacto de los hallazgos y un consejo directo.
@@ -532,5 +532,3 @@ Dame un informe de Auditoría Profunda indicando el impacto de los hallazgos y u
         return await ask_llm(system_prompt=sys_prompt, user_prompt=user_prompt, temperature=0.3)
     except Exception as e:
         return f"Error en la auditoría AI: {e}"
-
-

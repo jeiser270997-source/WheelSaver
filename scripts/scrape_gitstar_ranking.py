@@ -86,26 +86,27 @@ def parse_repos_from_html(html):
 
     return repos
 
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
 
 @retry(
     stop=stop_after_attempt(5),
     wait=wait_exponential(multiplier=1, min=4, max=60),
     retry=retry_if_exception_type((httpx.RequestError, httpx.HTTPStatusError)),
-    reraise=True
+    reraise=True,
 )
 def fetch_page(client, url):
     resp = client.get(url)
     resp.raise_for_status()
     return resp
 
+
 def scrape_gitstar(start_page=1, max_pages=None):
     """Scrapea gitstar-ranking.com desde start_page hasta max_pages."""
     total_pages = max_pages if max_pages else (TOTAL_PAGES - start_page + 1)
 
-    logger.info(
-        "Scrapeando gitstar-ranking.com: paginas {} a {}", start_page, start_page + total_pages - 1
-    )
+    logger.info("Scrapeando gitstar-ranking.com: paginas {} a {}", start_page, start_page + total_pages - 1)
 
     all_repos = []
     page = start_page
@@ -124,7 +125,6 @@ def scrape_gitstar(start_page=1, max_pages=None):
                 logger.error("Error definitivo en pagina {}: {}", page_num, e)
                 continue
 
-
             repos = parse_repos_from_html(resp.text)
             all_repos.extend(repos)
             time.sleep(REQUEST_DELAY)
@@ -137,7 +137,7 @@ def main(max_pages=None, start_page=1):
     import sys
 
     # Parse CLI args only if called as script (sys.argv has file)
-    if len(sys.argv) > 1 and sys.argv[0].endswith(('.py', '.exe')):
+    if len(sys.argv) > 1 and sys.argv[0].endswith((".py", ".exe")):
         parser = argparse.ArgumentParser(description="Scrapea gitstar-ranking.com")
         parser.add_argument("--pages", type=int, default=0, help="Paginas (0 = todas)")
         parser.add_argument("--start", type=int, default=1, help="Pagina inicial")

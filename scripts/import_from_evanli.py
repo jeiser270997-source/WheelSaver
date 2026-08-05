@@ -135,18 +135,20 @@ def parse_md_table(text):
     return repos
 
 
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
 
 @retry(
     stop=stop_after_attempt(5),
     wait=wait_exponential(multiplier=1, min=4, max=60),
     retry=retry_if_exception_type((httpx.RequestError, httpx.HTTPStatusError)),
-    reraise=True
+    reraise=True,
 )
 def fetch_page(client, url):
     resp = client.get(url)
     resp.raise_for_status()
     return resp
+
 
 def fetch_and_parse(url, label, client):
     """Descarga un archivo Markdown y parsea los repos."""

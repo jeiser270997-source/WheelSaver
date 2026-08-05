@@ -40,9 +40,7 @@ def _run_tool(cmd: list[str], cwd: Path) -> tuple[int, str, str]:
 
 def _run_bandit(target: Path) -> dict:
     """Ejecuta bandit (seguridad) y devuelve resumen por severidad."""
-    code, stdout, stderr = _run_tool(
-        ["bandit", "-r", str(target), "-x", "tests,venv,.venv,data,.audit", "-f", "json", "-q"], cwd=target
-    )
+    code, stdout, stderr = _run_tool(["bandit", "-r", str(target), "-x", "tests,venv,.venv,data,.audit", "-f", "json", "-q"], cwd=target)
     if code == -1:
         return {"available": False, "error": stderr}
 
@@ -77,9 +75,7 @@ def _run_bandit(target: Path) -> dict:
 
 def _run_vulture(target: Path) -> dict:
     """Ejecuta vulture (código muerto) y devuelve resumen."""
-    code, stdout, stderr = _run_tool(
-        ["vulture", str(target), "--min-confidence", "80"], cwd=target
-    )
+    code, stdout, stderr = _run_tool(["vulture", str(target), "--min-confidence", "80"], cwd=target)
     if code == -1:
         return {"available": False, "error": stderr}
 
@@ -93,9 +89,7 @@ def _run_vulture(target: Path) -> dict:
 
 def _run_radon(target: Path) -> dict:
     """Ejecuta radon (complejidad ciclomática) y devuelve funciones más complejas."""
-    code, stdout, stderr = _run_tool(
-        ["radon", "cc", str(target), "-j"], cwd=target
-    )
+    code, stdout, stderr = _run_tool(["radon", "cc", str(target), "-j"], cwd=target)
     if code == -1:
         return {"available": False, "error": stderr}
 

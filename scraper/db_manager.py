@@ -6,20 +6,23 @@ import sqlite3
 import httpx
 from loguru import logger
 
+
 def get_db_path() -> str:
     # 1. Variable de entorno
     if "WHEELSAVER_DB_PATH" in os.environ:
         return os.environ["WHEELSAVER_DB_PATH"]
-    
+
     # 2. Proyecto local (desarrollo)
     local_db = os.path.join(os.getcwd(), "data", "top_repos.db")
     if os.path.exists(local_db):
         return local_db
-        
+
     # 3. Instalación global (fallback)
     return os.path.join(os.path.expanduser("~"), ".wheelsaver", "top_repos.db")
 
+
 DB_PATH = get_db_path()
+
 
 def make_repo_id(owner, name):
     """
@@ -33,11 +36,13 @@ def make_repo_id(owner, name):
 def escape_fts_query(kw: str) -> str:
     """Escapa comillas dobles internas y remueve operadores especiales de FTS5."""
     import re
-    kw_clean = re.sub(r'[*():^"=]', ' ', str(kw))
+
+    kw_clean = re.sub(r'[*():^"=]', " ", str(kw))
     return kw_clean.strip()
 
 
 _DB_INITIALIZED = False
+
 
 def init_db():
     global _DB_INITIALIZED
@@ -333,10 +338,7 @@ def search_repos_multi_keywords(keywords, limit=20, conn=None):
             # Fallback: LIKE queries
             used_fallback = True
             seen = set()
-            cursor.execute(
-                "SELECT name, owner, description, url, stars, language, topics FROM repos ORDER BY stars DESC LIMIT ?",
-                (limit * 20,)
-            )
+            cursor.execute("SELECT name, owner, description, url, stars, language, topics FROM repos ORDER BY stars DESC LIMIT ?", (limit * 20,))
             all_repos = cursor.fetchall()
             results = []
             for r in all_repos:
@@ -371,9 +373,7 @@ def search_repos_multi_keywords(keywords, limit=20, conn=None):
     if not repos and owns_conn:
         repo_dicts = _fetch_live_github(" ".join(keywords), limit)
         if repo_dicts:
-            logger.info(
-                "+{} repos encontrados via GitHub API y guardados en BD local", len(repo_dicts)
-            )
+            logger.info("+{} repos encontrados via GitHub API y guardados en BD local", len(repo_dicts))
             repos = repo_dicts[:limit]
 
     return repos
@@ -483,9 +483,7 @@ def get_all_repos(conn=None):
         owns_conn = True
     try:
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT name, description, topics, url, stars FROM repos ORDER BY stars DESC"
-        )
+        cursor.execute("SELECT name, description, topics, url, stars FROM repos ORDER BY stars DESC")
         results = cursor.fetchall()
     finally:
         if owns_conn:

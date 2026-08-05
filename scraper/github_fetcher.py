@@ -211,14 +211,7 @@ def fetch_top_repos(min_stars=500, run_id=None):
                         total_skipped += 1
                         continue
 
-                    topics = (
-                        [
-                            t["topic"]["name"]
-                            for t in node.get("repositoryTopics", {}).get("nodes", [])
-                        ]
-                        if node.get("repositoryTopics")
-                        else []
-                    )
+                    topics = [t["topic"]["name"] for t in node.get("repositoryTopics", {}).get("nodes", [])] if node.get("repositoryTopics") else []
 
                     lang = node.get("primaryLanguage")
                     repos_to_insert.append(
@@ -239,11 +232,7 @@ def fetch_top_repos(min_stars=500, run_id=None):
                     upsert_repos(repos_to_insert)
                     total_fetched += len(repos_to_insert)
 
-                print(
-                    f"✅ Procesados: {total_fetched:,} | "
-                    f"Omitidos: {total_skipped:,} | "
-                    f"Estrellas actuales: {last_repo_stars:,}"
-                )
+                print(f"✅ Procesados: {total_fetched:,} | Omitidos: {total_skipped:,} | Estrellas actuales: {last_repo_stars:,}")
 
                 has_next_page = search_data["pageInfo"]["hasNextPage"]
                 cursor = search_data["pageInfo"]["endCursor"]
@@ -274,11 +263,7 @@ def fetch_top_repos(min_stars=500, run_id=None):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="WheelSaver Scraper — Descarga repos top de GitHub con filtros de calidad"
-    )
-    parser.add_argument(
-        "--min-stars", type=int, default=500, help="Mínimo de estrellas (default: 500)"
-    )
+    parser = argparse.ArgumentParser(description="WheelSaver Scraper — Descarga repos top de GitHub con filtros de calidad")
+    parser.add_argument("--min-stars", type=int, default=500, help="Mínimo de estrellas (default: 500)")
     args = parser.parse_args()
     fetch_top_repos(min_stars=args.min_stars)

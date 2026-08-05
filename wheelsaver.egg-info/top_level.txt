@@ -1,5 +1,0 @@
-api
-cli
-scraper
-scripts
-services

@@ -109,4 +109,3 @@ def detect_stack_and_framework(target: Path) -> dict:
         ],
         "static_analysis": static_analysis,
     }
-

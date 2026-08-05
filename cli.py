@@ -13,6 +13,7 @@ Uso:
     python cli.py swap <feature>                   # Busca alternativa a lo que codeas
 """
 
+import asyncio
 import os
 import re
 import sys
@@ -55,13 +56,9 @@ def clean(text, max_len=80):
 
 @app.command()
 def search(
-    keywords: list[str] = typer.Argument(
-        ..., help="Keywords para buscar (FTS5 sobre name, description, topics)"
-    ),
+    keywords: list[str] = typer.Argument(..., help="Keywords para buscar (FTS5 sobre name, description, topics)"),
     limit: int = typer.Option(20, "--limit", "-l", help="Max resultados"),
-    language: str = typer.Option(
-        None, "--language", help="Filtrar por lenguaje (ej: Python, Rust)"
-    ),
+    language: str = typer.Option(None, "--language", help="Filtrar por lenguaje (ej: Python, Rust)"),
     min_stars: int = typer.Option(None, "--min-stars", help="Estrellas minimas"),
 ):
     """Busca repos en la base de datos usando FTS5."""
@@ -205,7 +202,6 @@ def ready(
     console.print()
 
     # Detectar stack usando la capa de servicio
-    import sys
 
     from services.project_auditor import detect_stack_and_framework
 
@@ -265,6 +261,7 @@ def ready(
 
     console.print("\n[bold blue]🤖 Ejecutando Auditoría Profunda con IA...[/bold blue]")
     import asyncio
+
     from api.llm import audit_project_with_ai
 
     with console.status("[bold green]Analizando arquitectura + código estático...[/bold green]"):
@@ -275,18 +272,16 @@ def ready(
                 static_analysis=audit_data.get("static_analysis"),
             )
         )
-        
+
     console.print(Panel(report, title="[bold magenta]WheelSaver Deep Audit[/bold magenta]", border_style="cyan"))
-    
+
     if missing_categories:
         console.print("\n[dim]TIP: Corre 'python cli.py search <keyword>' para explorar mas librerias que cubran estos huecos.[/dim]")
 
 
 @app.command()
 def swap(
-    feature: str = typer.Argument(
-        ..., help="Que estas codeando? Ej: 'pdf parser', 'auth jwt', 'http client'"
-    ),
+    feature: str = typer.Argument(..., help="Que estas codeando? Ej: 'pdf parser', 'auth jwt', 'http client'"),
 ):
     """Busca si ya existe una libreria para lo que estas codeando."""
     from scraper.db_manager import search_repos_multi_keywords
@@ -315,9 +310,7 @@ def swap(
     console.print(table)
 
     top = results[0]
-    console.print(
-        f"\n[bold green]Mejor opcion:[/bold green] {top['owner']}/{top['name']} ({top['stars']:,}⭐)"
-    )
+    console.print(f"\n[bold green]Mejor opcion:[/bold green] {top['owner']}/{top['name']} ({top['stars']:,}⭐)")
     console.print(f"[dim]{top['url']}[/dim]")
     if top.get("description"):
         console.print(f"[dim]{clean(top['description'], 100)}[/dim]")
@@ -328,16 +321,12 @@ def swap(
         console.print(f"  npm install {top['name']}  # o yarn / pnpm")
     else:
         console.print(f"  Visita: {top['url']}")
-    console.print(
-        f"\n[dim]Mas resultados con: python cli.py search {' '.join(keywords)} --limit 20[/dim]"
-    )
+    console.print(f"\n[dim]Mas resultados con: python cli.py search {' '.join(keywords)} --limit 20[/dim]")
 
 
 @app.command(name="audit-code")
 def audit_code(
-    path: str = typer.Argument(
-        ".", help="Ruta al proyecto Python a analizar (por defecto: directorio actual)"
-    ),
+    path: str = typer.Argument(".", help="Ruta al proyecto Python a analizar (por defecto: directorio actual)"),
 ):
     """Analiza seguridad, codigo muerto y complejidad (bandit + vulture + radon)."""
     from pathlib import Path
@@ -357,10 +346,7 @@ def audit_code(
     # Seguridad (bandit)
     security = report.get("security", {})
     if not security.get("available"):
-        console.print(
-            f"[yellow]Seguridad (bandit): no disponible — "
-            f"{security.get('error', 'desconocido')}[/yellow]"
-        )
+        console.print(f"[yellow]Seguridad (bandit): no disponible — {security.get('error', 'desconocido')}[/yellow]")
     else:
         sev = security.get("by_severity", {})
         panel = Panel(
@@ -392,30 +378,18 @@ def audit_code(
     # Codigo muerto (vulture)
     dead_code = report.get("dead_code", {})
     if not dead_code.get("available"):
-        console.print(
-            f"[yellow]Codigo muerto (vulture): no disponible — "
-            f"{dead_code.get('error', 'desconocido')}[/yellow]"
-        )
+        console.print(f"[yellow]Codigo muerto (vulture): no disponible — {dead_code.get('error', 'desconocido')}[/yellow]")
     else:
-        console.print(
-            f"\n[bold]Codigo muerto (vulture):[/bold] "
-            f"{dead_code.get('total_findings', 0)} hallazgos"
-        )
+        console.print(f"\n[bold]Codigo muerto (vulture):[/bold] {dead_code.get('total_findings', 0)} hallazgos")
         for line in dead_code.get("top_findings", []):
             console.print(f"  [dim]{clean(line, 100)}[/dim]")
 
     # Complejidad (radon)
     complexity = report.get("complexity", {})
     if not complexity.get("available"):
-        console.print(
-            f"[yellow]Complejidad (radon): no disponible — "
-            f"{complexity.get('error', 'desconocido')}[/yellow]"
-        )
+        console.print(f"[yellow]Complejidad (radon): no disponible — {complexity.get('error', 'desconocido')}[/yellow]")
     else:
-        console.print(
-            f"\n[bold]Alta complejidad (radon):[/bold] "
-            f"{complexity.get('high_complexity_count', 0)} funciones con rango D/E/F"
-        )
+        console.print(f"\n[bold]Alta complejidad (radon):[/bold] {complexity.get('high_complexity_count', 0)} funciones con rango D/E/F")
         findings = complexity.get("top_findings", [])
         if findings:
             table = Table(title="Funciones mas complejas")
@@ -435,24 +409,24 @@ def audit_code(
 
 @app.command()
 def skillify(
-    repo: str = typer.Argument(
-        ..., help="Repositorio a convertir en skill. Ej: 'tiangolo/fastapi'"
-    ),
+    repo: str = typer.Argument(..., help="Repositorio a convertir en skill. Ej: 'tiangolo/fastapi'"),
 ):
     """Convierte un repositorio en una Skill de IA local."""
     import asyncio
-    import httpx
     import os
+
+    import httpx
+
     from api.llm import generate_skill_from_repo
-    
+
     console.print(f"[bold blue]🪄 Iniciando Meta-Skill: wheel-skillify para {repo}...[/bold blue]")
-    
+
     # 1. Fetch repo info
     headers = {}
     gh_token = os.getenv("GITHUB_TOKEN")
     if gh_token:
         headers["Authorization"] = f"token {gh_token}"
-        
+
     with console.status("[bold green]Descargando datos del repositorio desde GitHub...[/bold green]"):
         try:
             r_info = httpx.get(f"https://api.github.com/repos/{repo}", headers=headers, timeout=10, follow_redirects=True)
@@ -463,34 +437,36 @@ def skillify(
             repo_data = r_info.json()
             description = repo_data.get("description", "")
             default_branch = repo_data.get("default_branch", "main")
-            
+
             # Fetch readme
             r_readme = httpx.get(f"https://raw.githubusercontent.com/{repo}/{default_branch}/README.md", timeout=10, follow_redirects=True)
             readme = r_readme.text if r_readme.status_code == 200 else ""
         except Exception as e:
             console.print(f"[bold red]Error al contactar GitHub: {e}[/bold red]")
             raise typer.Exit(1)
-            
+
     # 2. Generar SKILL.md usando IA
     with console.status("[bold green]Generando SKILL.md con IA (RAG)...[/bold green]"):
         skill_content = asyncio.run(generate_skill_from_repo(repo, description, readme))
-        
+
     # 3. Guardar en ~/.gemini/config/skills/[repo_name]/SKILL.md
     repo_name = repo.split("/")[-1].lower()
     skills_dir = os.path.expanduser("~/.gemini/config/skills")
     target_dir = os.path.join(skills_dir, repo_name)
     os.makedirs(target_dir, exist_ok=True)
-    
+
     skill_path = os.path.join(target_dir, "SKILL.md")
     with open(skill_path, "w", encoding="utf-8") as f:
         f.write(skill_content)
-        
-    console.print(Panel(
-        f"✅ Skill generada exitosamente en:\n[dim]{skill_path}[/dim]\n\n"
-        f"Tu IA ahora tiene preinstalado el conocimiento para usar [bold]{repo}[/bold].",
-        title="Wheel-Skillify", border_style="green"
-    ))
-import asyncio
+
+    console.print(
+        Panel(
+            f"✅ Skill generada exitosamente en:\n[dim]{skill_path}[/dim]\n\n"
+            f"Tu IA ahora tiene preinstalado el conocimiento para usar [bold]{repo}[/bold].",
+            title="Wheel-Skillify",
+            border_style="green",
+        )
+    )
 
 
 @app.command()
@@ -510,11 +486,11 @@ def ask(
     console.print(f"[bold blue]Consultando a la IA sobre:[/bold blue] {question}")
 
     from api.llm import expand_search_query
-    from scraper.db_manager import search_repos_multi_keywords, search_repos
+    from scraper.db_manager import search_repos, search_repos_multi_keywords
 
     # Extraer keywords con LLM
     keywords = asyncio.run(expand_search_query(question))
-    
+
     if not keywords:
         repos = []
     elif len(keywords) == 1:
@@ -532,9 +508,7 @@ def ask(
     with console.status("[bold green]Generando respuesta de la IA...[/bold green]"):
         answer = asyncio.run(ask_llm_about_repos(question, repos))
 
-    console.print(
-        Panel(answer, title="[bold magenta]WheelSaver AI[/bold magenta]", border_style="cyan")
-    )
+    console.print(Panel(answer, title="[bold magenta]WheelSaver AI[/bold magenta]", border_style="cyan"))
 
 
 if __name__ == "__main__":

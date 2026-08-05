@@ -69,10 +69,18 @@ async def _build_async_db():
     for repo in SAMPLE_REPOS:
         topics_str = ",".join(repo["topics"])
         await db.execute(
-            "INSERT INTO repos (id, name, owner, description, url, stars, language, topics, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (repo["id"], repo["name"], repo["owner"], repo["description"], repo["url"],
-             repo["stars"], repo["language"], topics_str, repo["updated_at"]),
+            "INSERT INTO repos (id, name, owner, description, url, stars, language, topics, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                repo["id"],
+                repo["name"],
+                repo["owner"],
+                repo["description"],
+                repo["url"],
+                repo["stars"],
+                repo["language"],
+                topics_str,
+                repo["updated_at"],
+            ),
         )
     await db.commit()
     await db.execute("INSERT INTO repos_fts(repos_fts) VALUES('rebuild')")
@@ -150,10 +158,12 @@ class TestGetStatsAsync:
     def test_language_filter_handles_null(self, async_db):
         from api.repository import get_stats_async
 
-        _run_async(async_db.execute(
-            "INSERT INTO repos (id, name, owner, description, url, stars, language, topics, updated_at) "
-            "VALUES ('null-lang', 'null-repo', 'null', 'desc', 'url', 10, NULL, '', '')"
-        ))
+        _run_async(
+            async_db.execute(
+                "INSERT INTO repos (id, name, owner, description, url, stars, language, topics, updated_at) "
+                "VALUES ('null-lang', 'null-repo', 'null', 'desc', 'url', 10, NULL, '', '')"
+            )
+        )
         _run_async(async_db.commit())
         stats = _run_async(get_stats_async(async_db))
         assert isinstance(stats["languages"], int)

@@ -61,8 +61,6 @@ def search_db(keywords):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print(
-            json.dumps({"error": "Faltan keywords. Uso: python search_db.py keyword1 keyword2 ..."})
-        )
+        print(json.dumps({"error": "Faltan keywords. Uso: python search_db.py keyword1 keyword2 ..."}))
     else:
         search_db(sys.argv[1:])

@@ -30,6 +30,7 @@ def _no_real_providers(monkeypatch):
     Patch _get_active_providers to return [] by default.
     Tests that need specific providers override this fixture."""
     import api.llm
+
     monkeypatch.setattr(api.llm, "_get_active_providers", lambda: [])
     yield
 
@@ -68,13 +69,14 @@ class TestGetActiveProviders:
     def test_empty_providers_default(self):
         """With _no_real_providers fixture, _get_active_providers returns []."""
         import api.llm
+
         assert api.llm._get_active_providers() == []
 
     def test_single_provider_override(self, monkeypatch):
         """Override the autouse fixture to test single provider behavior."""
         import api.llm
-        fake = [{"name": "groq", "api_key": "test", "base_url": "http://localhost:9999/v1",
-                 "model": "test-model", "priority": 1, "type": "openai"}]
+
+        fake = [{"name": "groq", "api_key": "test", "base_url": "http://localhost:9999/v1", "model": "test-model", "priority": 1, "type": "openai"}]
         monkeypatch.setattr(api.llm, "_get_active_providers", lambda: fake)
         providers = api.llm._get_active_providers()
         assert len(providers) == 1
@@ -151,8 +153,12 @@ class TestBuildStaticAnalysisSummary:
         from api.llm import _build_static_analysis_summary
 
         static = {
-            "security": {"available": True, "total_findings": 3, "by_severity": {"HIGH": 1, "MEDIUM": 1, "LOW": 1},
-                         "top_findings": [{"file": "test.py", "line": 10, "severity": "HIGH", "issue": "Hardcoded password"}]},
+            "security": {
+                "available": True,
+                "total_findings": 3,
+                "by_severity": {"HIGH": 1, "MEDIUM": 1, "LOW": 1},
+                "top_findings": [{"file": "test.py", "line": 10, "severity": "HIGH", "issue": "Hardcoded password"}],
+            },
             "dead_code": {"available": True, "total_findings": 5},
             "complexity": {"available": True, "high_complexity_count": 2},
         }
@@ -172,11 +178,13 @@ class TestAuditProjectWithAI:
     def test_missing_providers_returns_offline_report(self):
         from api.llm import audit_project_with_ai
 
-        result = _run_async(audit_project_with_ai(
-            {"stack_str": "Python", "framework": "FastAPI"},
-            [("Testing", "testing", "pytest")],
-            None,
-        ))
+        result = _run_async(
+            audit_project_with_ai(
+                {"stack_str": "Python", "framework": "FastAPI"},
+                [("Testing", "testing", "pytest")],
+                None,
+            )
+        )
         assert "WheelSaver" in result
         assert "Componentes Faltantes" in result
 

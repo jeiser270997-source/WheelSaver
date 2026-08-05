@@ -9,8 +9,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
@@ -18,9 +16,7 @@ class TestRunTool:
     def test_tool_not_found(self):
         from services.static_analyzer import _run_tool
 
-        code, stdout, stderr = _run_tool(
-            ["nonexistent_tool_xyz"], Path(os.path.dirname(__file__))
-        )
+        code, stdout, stderr = _run_tool(["nonexistent_tool_xyz"], Path(os.path.dirname(__file__)))
         assert code == -1
         assert "no instalada" in stderr.lower() or "no encontrada" in stderr.lower() or "not found" in stderr.lower()
 

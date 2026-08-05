@@ -10,11 +10,15 @@ Documentacion automatica: http://localhost:8000/docs
 """
 
 import asyncio
+
 import aiosqlite
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from api.database import DB_PATH, get_db
 from api.repository import (
@@ -27,16 +31,12 @@ from api.repository import (
     search_repos_multi_keywords_async,
 )
 
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-
 limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
     title="WheelSaver API",
     description="Busca y analiza repositorios de GitHub desde la base de datos local de WheelSaver. RAG multi-proveedor con failover automático.",
-    version="3.3.1",
+    version="3.3.2",
 )
 
 app.state.limiter = limiter
@@ -127,13 +127,9 @@ async def list_repos(
     db: aiosqlite.Connection = Depends(get_db),
 ):
     """Lista paginada de repositorios."""
-    order_col = (
-        "stars" if sort == "stars" else (sort if sort in ("name", "updated_at") else "stars")
-    )
+    order_col = "stars" if sort == "stars" else (sort if sort in ("name", "updated_at") else "stars")
     offset = (page - 1) * per_page
-    repos = await list_repos_async(
-        db, order_col=order_col, language=language, per_page=per_page, offset=offset
-    )
+    repos = await list_repos_async(db, order_col=order_col, language=language, per_page=per_page, offset=offset)
     return {"page": page, "per_page": per_page, "repos": repos, "total": len(repos)}
 
 
@@ -162,6 +158,7 @@ async def trigger_scrape(
     """
     import os
     from datetime import datetime, timezone
+
     from scraper.github_fetcher import fetch_top_repos
 
     # Validar autorización por env var o header
@@ -199,9 +196,7 @@ async def trigger_scrape(
         """)
 
         # 1. Auto-recuperar locks stale (> 6h)
-        cursor = await db.execute(
-            "SELECT id, started_at FROM run_history WHERE status = 'running'"
-        )
+        cursor = await db.execute("SELECT id, started_at FROM run_history WHERE status = 'running'")
         rows = await cursor.fetchall()
         for row in rows:
             started_at = datetime.fromisoformat(row["started_at"].replace("Z", "+00:00"))
@@ -227,8 +222,7 @@ async def trigger_scrape(
             await db.close()
             raise HTTPException(
                 status_code=409,
-                detail=f"Ya hay un scraper en ejecucion. "
-                       f"Espera a que termine o {STALE_TIMEOUT_HOURS}h para auto-recuperacion.",
+                detail=f"Ya hay un scraper en ejecucion. Espera a que termine o {STALE_TIMEOUT_HOURS}h para auto-recuperacion.",
             )
 
         new_run_id = cursor.lastrowid
