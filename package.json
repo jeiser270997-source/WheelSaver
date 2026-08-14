@@ -1,0 +1,14 @@
+{
+  "name": "wheelsaver-mcp",
+  "version": "3.3.2",
+  "description": "WheelSaver MCP server — biblioteca GitHub del ecosistema (20k+ repos, FTS5)",
+  "private": true,
+  "main": "mcp_server.js",
+  "scripts": {
+    "test": "node --test tests/mcp_helpers.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "better-sqlite3": "^11.0.0"
+  }
+}
