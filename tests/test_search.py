@@ -119,7 +119,9 @@ class TestSearch:
         cursor = db_with_data.cursor()
         order_map = {"stars": "stars", "name": "name", "updated_at": "updated_at"}
         safe_order = order_map.get("stars; DROP TABLE repos;--", "stars")
-        cursor.execute(f"SELECT name FROM repos ORDER BY {safe_order} DESC LIMIT 5")
+        # Test intencional de sanitización: safe_order proviene de un map allow-list,
+        # nunca de input directo del usuario.
+        cursor.execute(f"SELECT name FROM repos ORDER BY {safe_order} DESC LIMIT 5")  # nosec B608
         results = cursor.fetchall()
         assert len(results) > 0
 

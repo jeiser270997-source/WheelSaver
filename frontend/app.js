@@ -2,6 +2,15 @@ const API_BASE = window.location.origin && window.location.origin.startsWith("ht
     ? window.location.origin 
     : "http://127.0.0.1:8000";
 
+// Solo permite URLs http/https — bloquea javascript:/data: inyectados en la BD
+function safeExternalUrl(raw) {
+    try {
+        const u = new URL(raw, window.location.origin);
+        if (u.protocol === "http:" || u.protocol === "https:") return u.href;
+    } catch (e) { /* fallthrough */ }
+    return "#";
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     loadStats();
 
@@ -28,7 +37,13 @@ function showToast(message, type = "success") {
     toast.setAttribute("role", type === "error" ? "alert" : "status");
     
     const icon = type === "success" ? "✅" : "❌";
-    toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+    // textContent — evita XSS si el mensaje contiene HTML (defensa en profundidad)
+    const iconSpan = document.createElement("span");
+    iconSpan.textContent = icon;
+    const msgSpan = document.createElement("span");
+    msgSpan.textContent = message;
+    toast.appendChild(iconSpan);
+    toast.appendChild(msgSpan);
     
     container.appendChild(toast);
     
@@ -108,17 +123,34 @@ async function performSearch() {
             const tr = document.createElement("tr");
             tr.setAttribute("data-testid", `result-row-${idx}`);
             
-            // Name & URL
+            // Name & URL (DOM API — evita XSS por inyección HTML en datos de la BD)
             const tdName = document.createElement("td");
-            tdName.innerHTML = `<a href="${repo.url}" target="_blank" data-testid="repo-link-${idx}">${repo.owner}/${repo.name}</a>`;
-            
+            const link = document.createElement("a");
+            link.href = safeExternalUrl(repo.url);
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.setAttribute("data-testid", `repo-link-${idx}`);
+            link.textContent = `${repo.owner}/${repo.name}`;
+            tdName.appendChild(link);
+
             // Stars
             const tdStars = document.createElement("td");
-            tdStars.innerHTML = `<span style="color: #fbbf24; font-weight: 600;">⭐ ${repo.stars.toLocaleString()}</span>`;
-            
+            const starsSpan = document.createElement("span");
+            starsSpan.style.color = "#fbbf24";
+            starsSpan.style.fontWeight = "600";
+            starsSpan.textContent = `⭐ ${(Number(repo.stars) || 0).toLocaleString()}`;
+            tdStars.appendChild(starsSpan);
+
             // Language
             const tdLang = document.createElement("td");
-            tdLang.innerHTML = repo.language ? `<span class="badge">${repo.language}</span>` : "-";
+            if (repo.language) {
+                const badge = document.createElement("span");
+                badge.className = "badge";
+                badge.textContent = repo.language;
+                tdLang.appendChild(badge);
+            } else {
+                tdLang.textContent = "-";
+            }
             
             // Description
             const tdDesc = document.createElement("td");

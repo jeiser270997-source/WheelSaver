@@ -1,30 +1,52 @@
-﻿# WheelSaver Audit — WheelSaver (v3.3 self-audit actual)
-> Auditado el 2026-07-08 | ~23k repos en la base de datos
+# WheelSaver Audit — WheelSaver (v3.3.2 self-audit actual)
+> Auditado el 2026-08-12 | ~25k repos en la base de datos
 
-## Lo que se resolvió recientemente
-✅ **Arquitectura Limpia y Base de Datos Asíncrona:** Se implementó `aiosqlite`, se movió la lógica a `api/repository.py` y se inyectaron dependencias limpiamente en `api/main.py`.
-✅ **Cobertura de Código (Tests Asíncronos):** Se integró `pytest-asyncio` logrando 72% de cobertura en la API.
+## Estado actual (Deep Loop Audit v3.3.2)
 
----
+### ✅ Verde — Verificado con herramientas del propio proyecto
+- **Tests**: 81/81 pasan (`pytest -v`).
+- **Seguridad (bandit)**: 0 hallazgos.
+- **Lint (ruff)**: all checks passed.
+- **Complejidad (radon)**: 0 funciones rango D/E/F · todos los módulos con índice de mantenibilidad grado A.
+- **Secretos**: 0 leaks detectados · `.env` NO está trackeado en git.
+- **CI**: `.github/workflows/test.yml` ejecuta `pytest` en cada Push/PR (Python 3.12).
 
-## ¿Queda Deuda Técnica? Sí.
-El proyecto ahora tiene un backend muy robusto, pero la deuda técnica restante se concentra principalmente en **DevOps, Rendimiento (Caché) y CI/CD**.
+### 🔴 Seguridad (resuelto en v3.3.2)
+- **XSS almacenado en frontend**: se reemplazó `innerHTML` por DOM API (`textContent` + `createElement`) en `frontend/app.js`, con validación de URLs (`safeExternalUrl` solo permite http/https) y `rel="noopener noreferrer"`.
+- **API key de Google en URL**: `_ask_google` ahora envía la key en el header `x-goog-api-key` (nunca en query string) — `api/llm_providers.py`.
+- **Comparación de `X-API-Key`**: `hmac.compare_digest` en tiempo constante — `api/main.py`.
+- **CORS `*`**: restringido por defecto a `http://127.0.0.1:8000,http://localhost:8000`, ampliable con `ALLOWED_ORIGINS`.
 
-### 1. Ausencia de Pruebas Continuas (CI)
-**Prioridad**: 🔴 Alta (QA Automation)
-- **Problema**: Existe un flujo de GitHub Actions para actualizar la base de datos (`update-db.yml`), pero **no hay un pipeline de integración continua** para ejecutar los nuevos tests automáticos (`pytest`) en cada Push o Pull Request.
-- **Riesgo**: Si un desarrollador rompe algo, no se detectará hasta que se corra localmente.
+### 🟡 Deuda técnica (resuelto en v3.3.2)
+- `repomix_last_run.log` fuera de git (`git rm --cached` + `.gitignore`).
+- Código muerto eliminado: `REPOS_PER_PAGE` (scrape_gitstar_ranking) y `make_table` (cli_ui).
+- Imports movidos al top de `api/main.py` (`os`, `datetime`, `pydantic.BaseModel`).
+- `StaticFiles` del frontend resuelto contra `__file__` (independiente del cwd).
+- `requirements.txt` con versiones fijadas (`==`) para reproducibilidad.
+- `Dockerfile` con usuario no-root (`wheelsaver`) y build toolchain purgado; volumen de `docker-compose` alineado a `/home/wheelsaver/.wheelsaver`.
 
-### 2. Servidor de Producción
-**Prioridad**: ❌ Descartado (Es un proyecto personal, uvicorn con 1 worker basta)
+## Historial (v3.3)
+- ✅ **Arquitectura Limpia y Base de Datos Asíncrona:** `aiosqlite`, lógica en `api/repository.py`, dependencias limpias en `api/main.py`.
+- ✅ **Cobertura de Código:** `pytest-asyncio` con cobertura en la API.
+- ✅ **CI/CD:** Pipeline de tests en GitHub Actions (resuelto tras el informe v3.3).
+- ✅ **Git LFS**: Configurado para `top_repos.db` para no inflar el repositorio con binarios.
+- ✅ **Seguridad**: `.env.example` con recomendación de tokens Read-Only.
 
-### 3. Falta de Caché
-**Prioridad**: ❌ Descartado (SQLite in-memory/local es ultrarrápido para uso personal)
+## Decisiones de diseño (descartadas a propósito — proyecto personal)
+- **Servidor de Producción**: uvicorn con 1 worker es suficiente (no es SaaS).
+- **Caché**: SQLite local WAL es ultrarrápido para uso personal.
+- **Background Task Worker**: sin brokers complejos; `asyncio.to_thread` basta.
 
-### 4. Background Task Worker
-**Prioridad**: ❌ Descartado (No es un SaaS, no requiere brokers complejos)
-
-## Siguientes Pasos (Ejecutados)
-✅ **Git LFS**: Configurado para 	op_repos.db para no inflar el repositorio con binarios.
-✅ **Seguridad**: Se agregó .env.example recomendando el uso de tokens Read-Only.
-
+## Pasada 2026-08-15 (deep loop audit a nivel producción)
+- **Tests: 80/80 PASS** (`python -m pytest tests/ -q`).
+- **DB real: 20,073 repos** (no 25,411) — README/CLAUDE actualizados a v3.3.2.
+- **Diff previo (v3.3.2) guardado**: refactor search/synonyms/scoring extraídos de
+  db_manager, api/llm.py slim (−300 líneas), frontend XSS fix, Docker no-root,
+  requirements fijados — quedaba sin commitear; incluido en el checkpoint.
+- **Eliminados**: `CREAR REPOMIX.BAT`, `GENERARREPOMIX.BAT`, `test_ui.py` (raíz,
+  duplicado de tests/test_e2e_ui.py), `repomix_*.md` + `repomix_parts/` +
+  `wheelsaver.egg-info` + `data/typesense/` (artefactos gitignored, FS limpio).
+- **Integración ecosistema verificada**: Faceless lee la DB real vía
+  `services/wheel_*.js` (better-sqlite3 + FTS5) — no ports estáticos.
+- **Pendiente (no deuda)**: `scripts/deduplicate_db.py` es utilidad manual de
+  mantenimiento (rebuild FTS) — se conserva.

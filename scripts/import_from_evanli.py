@@ -113,8 +113,9 @@ def parse_md_table(text):
             parts = url.rstrip("/").split("/")
             if len(parts) >= 4 and parts[2] == "github.com":
                 owner = parts[3]
-        except Exception:
-            pass
+        except Exception as e:
+            # URLs malformadas se ignoran y se descartan el repo
+            logger.debug("URL invalida ignorada: {} ({})", url[:60], e)
 
         if not owner:
             continue

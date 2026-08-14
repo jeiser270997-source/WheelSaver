@@ -28,7 +28,7 @@ para busquedas ultrarrápidas y offline.
 - `api/main.py`: API REST con FastAPI (endpoints: `/search`, `/stats`, `/repos`, `/languages`, `/top`, `/health`, `/scrape`, `/ask`) protegida con rate limiting y guardias en `/scrape`.
 - `services/project_auditor.py`: Detector modular de stack del proyecto.
 - `services/static_analyzer.py`: Análisis estático (bandit + vulture + radon).
-- `~/.wheelsaver/top_repos.db`: Base de datos SQLite (25,411 repos, indice FTS5).
+- `data/top_repos.db` (proyecto) o `~/.wheelsaver/top_repos.db`: Base de datos SQLite (20,073 repos, indice FTS5).
 - `tests/`: 80+ tests con pytest + BD in-memory + Playwright E2E + GitHub Actions CI (`.github/workflows/test.yml`).
 
 ## Reglas de Desarrollo
@@ -41,3 +41,8 @@ para busquedas ultrarrápidas y offline.
 - `upsert_external_repos()` en db_manager maneja IDs sinteticos automaticamente.
 - httpx es el cliente HTTP preferido sobre requests.
 
+
+## ECOSYSTEM (2026-08-15)
+- WHEELSAVER = **biblioteca GitHub del ecosistema** (25k repos, FTS5, API REST, skills `wheel_saver`/`wheel-ready`/`wheel-swap`).
+- Consumido por: Faceless (`services/wheel_*`, `cli wheel`) y Asistente_Personal (subproyecto).
+- Mapa completo: `E:\PROYECTOS\Mis_Proyectos\faceless-bot TERMINADO\docs\ECOSYSTEM.md`

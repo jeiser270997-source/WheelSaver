@@ -11,17 +11,21 @@ Uso:
     python cli.py api [--host H] [--port P]
     python cli.py ready                            # Checklist de proyecto
     python cli.py swap <feature>                   # Busca alternativa a lo que codeas
+    python cli.py audit-code [path]                # bandit + vulture + radon
+    python cli.py skillify <repo>                  # Convierte repo en Skill de IA
+    python cli.py ask <question>                   # RAG multi-proveedor
 """
 
-import asyncio
 import os
-import re
 import sys
 
 import typer
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+
+from cli_commands.audit import audit_code, ready
+from cli_commands.skills import ask, skillify
+from cli_ui import clean, console
 
 # Reconfigurar stdout/stderr en Windows para evitar UnicodeEncodeError con cp1252
 if sys.platform == "win32":
@@ -30,8 +34,11 @@ if sys.platform == "win32":
             sys.stdout.reconfigure(encoding="utf-8")
         if hasattr(sys.stderr, "reconfigure"):
             sys.stderr.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
+    except Exception as e:
+        # Fallback: dejar la codificación por defecto si reconfigure falla
+        import logging
+
+        logging.debug("No se pudo reconfigurar stdout/stderr a UTF-8: %s", e)
 
 app = typer.Typer(
     name="wheelsaver",
@@ -40,18 +47,6 @@ app = typer.Typer(
 )
 import_group = typer.Typer(help="Import data from external sources")
 app.add_typer(import_group, name="import")
-
-console = Console()
-
-
-# Sanitizador para Windows cp1252 — limpia emojis y no-ASCII
-def clean(text, max_len=80):
-    """Limpia texto para terminal Windows."""
-    if not text:
-        return ""
-    # Remueve todo lo que no sea ASCII imprimible (+ acentos comunes)
-    cleaned = re.sub(r"[^\x20-\x7EÀ-ÿĀ-ſ]", "", text)
-    return cleaned[:max_len] + "..." if len(cleaned) > max_len else cleaned
 
 
 @app.command()
@@ -172,10 +167,10 @@ def api(
 @app.command()
 def docker():
     """Levanta WheelSaver en Docker (docker compose up)."""
-    import subprocess
+    import subprocess  # nosec B404 — subprocess legítimo para docker compose
 
     console.print("[bold blue]Levantando WheelSaver con Docker...[/bold blue]")
-    result = subprocess.run(
+    result = subprocess.run(  # nosec B603/B607 — lista de args fija, sin shell, sin input del usuario
         ["docker", "compose", "up", "--build", "-d"],
         capture_output=True,
         text=True,
@@ -188,95 +183,6 @@ def docker():
     else:
         console.print("[red]Error al levantar Docker:[/red]")
         console.print(result.stderr or result.stdout)
-
-
-@app.command()
-def ready(
-    path: str = typer.Option(".", "--path", help="Ruta del proyecto a analizar"),
-):
-    """Escanea un proyecto y genera checklist de lo que le falta."""
-    from pathlib import Path
-
-    target = Path(path).resolve()
-    console.print(f"[bold]Analizando proyecto:[/bold] {target}")
-    console.print()
-
-    # Detectar stack usando la capa de servicio
-
-    from services.project_auditor import detect_stack_and_framework
-
-    audit_data = detect_stack_and_framework(target)
-
-    console.print(
-        Panel(
-            f"[bold]Stack:[/bold] {audit_data['stack_str']}\n"
-            f"[bold]Framework:[/bold] {audit_data['framework'] or 'No detectado'}\n"
-            f"[bold]Ruta:[/bold] {target}",
-            title="Proyecto Detectado",
-            border_style="blue",
-        )
-    )
-
-    # Checklist
-    checks = audit_data["checks"]
-
-    table = Table(title="Checklist del Proyecto")
-    table.add_column("Estado", justify="center")
-    table.add_column("Categoria", style="bold")
-    table.add_column("Recomendacion")
-
-    missing_categories = []
-
-    for label, ok, cat, keywords in checks:
-        if ok:
-            table.add_row("✅", label, "[dim]Listo[/dim]")
-        else:
-            table.add_row("❌", label, f"[yellow]Buscar:[/yellow] {keywords}")
-            missing_categories.append((label, cat, keywords))
-
-    console.print(table)
-
-    # Si falta algo, buscar en BD
-    if missing_categories:
-        console.print("\n[bold yellow]Buscando recomendaciones en la BD...[/bold yellow]\n")
-        if len(missing_categories) > 3:
-            console.print(f"[dim]Mostrando recomendaciones solo para las primeras 3 de {len(missing_categories)} categorias faltantes.[/dim]")
-        for label, cat, keywords in missing_categories[:3]:  # Max 3 busquedas
-            kw_list = keywords.split()[:3]
-            kw_str = " ".join(kw_list)
-            from scraper.db_manager import search_repos_multi_keywords
-
-            results = search_repos_multi_keywords(kw_list, limit=3)
-            if results:
-                rec_table = Table(title=f"Recomendaciones para {label}")
-                rec_table.add_column("Repo")
-                rec_table.add_column("Estrellas", justify="right")
-                rec_table.add_column("Descripcion")
-                for r in results:
-                    desc = clean(r.get("description"), 60)
-                    rec_table.add_row(r["name"], f"{r['stars']:,}", desc)
-                console.print(rec_table)
-            else:
-                console.print(f"[dim]{label}: No se encontraron recomendaciones en la BD[/dim]")
-
-    console.print("\n[bold blue]🤖 Ejecutando Auditoría Profunda con IA...[/bold blue]")
-    import asyncio
-
-    from api.llm import audit_project_with_ai
-
-    with console.status("[bold green]Analizando arquitectura + código estático...[/bold green]"):
-        report = asyncio.run(
-            audit_project_with_ai(
-                audit_data,
-                missing_categories,
-                static_analysis=audit_data.get("static_analysis"),
-            )
-        )
-
-    console.print(Panel(report, title="[bold magenta]WheelSaver Deep Audit[/bold magenta]", border_style="cyan"))
-
-    if missing_categories:
-        console.print("\n[dim]TIP: Corre 'python cli.py search <keyword>' para explorar mas librerias que cubran estos huecos.[/dim]")
 
 
 @app.command()
@@ -324,191 +230,11 @@ def swap(
     console.print(f"\n[dim]Mas resultados con: python cli.py search {' '.join(keywords)} --limit 20[/dim]")
 
 
-@app.command(name="audit-code")
-def audit_code(
-    path: str = typer.Argument(".", help="Ruta al proyecto Python a analizar (por defecto: directorio actual)"),
-):
-    """Analiza seguridad, codigo muerto y complejidad (bandit + vulture + radon)."""
-    from pathlib import Path
-
-    from services.static_analyzer import analyze_python_project
-
-    target = Path(path).resolve()
-    if not target.exists():
-        console.print(f"[bold red]Error: la ruta no existe: {target}[/bold red]")
-        raise typer.Exit(1)
-
-    console.print(f"[bold blue]Analizando codigo en:[/bold blue] {target}\n")
-
-    with console.status("[bold green]Ejecutando bandit, vulture y radon...[/bold green]"):
-        report = analyze_python_project(target)
-
-    # Seguridad (bandit)
-    security = report.get("security", {})
-    if not security.get("available"):
-        console.print(f"[yellow]Seguridad (bandit): no disponible — {security.get('error', 'desconocido')}[/yellow]")
-    else:
-        sev = security.get("by_severity", {})
-        panel = Panel(
-            f"[bold]Total hallazgos:[/bold] {security.get('total_findings', 0)}\n"
-            f"[red]HIGH:[/red] {sev.get('HIGH', 0)}  "
-            f"[yellow]MEDIUM:[/yellow] {sev.get('MEDIUM', 0)}  "
-            f"[dim]LOW:[/dim] {sev.get('LOW', 0)}",
-            title="Seguridad (bandit)",
-            border_style="red",
-        )
-        console.print(panel)
-
-        findings = security.get("top_findings", [])
-        if findings:
-            table = Table(title="Top hallazgos de seguridad")
-            table.add_column("Archivo", style="cyan")
-            table.add_column("Linea", justify="right")
-            table.add_column("Severidad")
-            table.add_column("Problema")
-            for f in findings:
-                table.add_row(
-                    clean(f.get("file", ""), 40),
-                    str(f.get("line", "")),
-                    f.get("severity", ""),
-                    clean(f.get("issue", ""), 70),
-                )
-            console.print(table)
-
-    # Codigo muerto (vulture)
-    dead_code = report.get("dead_code", {})
-    if not dead_code.get("available"):
-        console.print(f"[yellow]Codigo muerto (vulture): no disponible — {dead_code.get('error', 'desconocido')}[/yellow]")
-    else:
-        console.print(f"\n[bold]Codigo muerto (vulture):[/bold] {dead_code.get('total_findings', 0)} hallazgos")
-        for line in dead_code.get("top_findings", []):
-            console.print(f"  [dim]{clean(line, 100)}[/dim]")
-
-    # Complejidad (radon)
-    complexity = report.get("complexity", {})
-    if not complexity.get("available"):
-        console.print(f"[yellow]Complejidad (radon): no disponible — {complexity.get('error', 'desconocido')}[/yellow]")
-    else:
-        console.print(f"\n[bold]Alta complejidad (radon):[/bold] {complexity.get('high_complexity_count', 0)} funciones con rango D/E/F")
-        findings = complexity.get("top_findings", [])
-        if findings:
-            table = Table(title="Funciones mas complejas")
-            table.add_column("Archivo", style="cyan")
-            table.add_column("Funcion")
-            table.add_column("Complejidad", justify="right")
-            table.add_column("Rango")
-            for f in findings:
-                table.add_row(
-                    clean(f.get("file", ""), 40),
-                    clean(f.get("name", ""), 30),
-                    str(f.get("complexity", "")),
-                    f.get("rank", ""),
-                )
-            console.print(table)
-
-
-@app.command()
-def skillify(
-    repo: str = typer.Argument(..., help="Repositorio a convertir en skill. Ej: 'tiangolo/fastapi'"),
-):
-    """Convierte un repositorio en una Skill de IA local."""
-    import asyncio
-    import os
-
-    import httpx
-
-    from api.llm import generate_skill_from_repo
-
-    console.print(f"[bold blue]🪄 Iniciando Meta-Skill: wheel-skillify para {repo}...[/bold blue]")
-
-    # 1. Fetch repo info
-    headers = {}
-    gh_token = os.getenv("GITHUB_TOKEN")
-    if gh_token:
-        headers["Authorization"] = f"token {gh_token}"
-
-    with console.status("[bold green]Descargando datos del repositorio desde GitHub...[/bold green]"):
-        try:
-            r_info = httpx.get(f"https://api.github.com/repos/{repo}", headers=headers, timeout=10, follow_redirects=True)
-            if r_info.status_code == 401:
-                # Token invalido, intentar sin auth
-                r_info = httpx.get(f"https://api.github.com/repos/{repo}", timeout=10, follow_redirects=True)
-            r_info.raise_for_status()
-            repo_data = r_info.json()
-            description = repo_data.get("description", "")
-            default_branch = repo_data.get("default_branch", "main")
-
-            # Fetch readme
-            r_readme = httpx.get(f"https://raw.githubusercontent.com/{repo}/{default_branch}/README.md", timeout=10, follow_redirects=True)
-            readme = r_readme.text if r_readme.status_code == 200 else ""
-        except Exception as e:
-            console.print(f"[bold red]Error al contactar GitHub: {e}[/bold red]")
-            raise typer.Exit(1)
-
-    # 2. Generar SKILL.md usando IA
-    with console.status("[bold green]Generando SKILL.md con IA (RAG)...[/bold green]"):
-        skill_content = asyncio.run(generate_skill_from_repo(repo, description, readme))
-
-    # 3. Guardar en ~/.gemini/config/skills/[repo_name]/SKILL.md
-    repo_name = repo.split("/")[-1].lower()
-    skills_dir = os.path.expanduser("~/.gemini/config/skills")
-    target_dir = os.path.join(skills_dir, repo_name)
-    os.makedirs(target_dir, exist_ok=True)
-
-    skill_path = os.path.join(target_dir, "SKILL.md")
-    with open(skill_path, "w", encoding="utf-8") as f:
-        f.write(skill_content)
-
-    console.print(
-        Panel(
-            f"✅ Skill generada exitosamente en:\n[dim]{skill_path}[/dim]\n\n"
-            f"Tu IA ahora tiene preinstalado el conocimiento para usar [bold]{repo}[/bold].",
-            title="Wheel-Skillify",
-            border_style="green",
-        )
-    )
-
-
-@app.command()
-def ask(
-    question: str = typer.Argument(
-        ...,
-        help="Tu pregunta para la IA. Ej: 'Cual es el mejor framework de python para graficos?'",
-    ),
-    provider: str = typer.Option(
-        None,
-        "--provider",
-        "-p",
-        help="Proveedor especifico (groq, cerebras, google, mistral, etc.)",
-    ),
-):
-    """Consulta a la IA (multi-proveedor) usando la base de datos local como contexto (RAG). Usa failover automático entre proveedores free tier."""
-    console.print(f"[bold blue]Consultando a la IA sobre:[/bold blue] {question}")
-
-    from api.llm import expand_search_query
-    from scraper.db_manager import search_repos, search_repos_multi_keywords
-
-    # Extraer keywords con LLM
-    keywords = asyncio.run(expand_search_query(question))
-
-    if not keywords:
-        repos = []
-    elif len(keywords) == 1:
-        repos = search_repos(keywords[0], limit=10)
-    else:
-        repos = search_repos_multi_keywords(keywords, limit=10)
-
-    if repos:
-        console.print(f"[dim]Contexto encontrado: {len(repos)} repositorios.[/dim]")
-    else:
-        console.print("[dim]Contexto encontrado: 0 repositorios.[/dim]")
-
-    from api.llm import ask_llm_about_repos
-
-    with console.status("[bold green]Generando respuesta de la IA...[/bold green]"):
-        answer = asyncio.run(ask_llm_about_repos(question, repos))
-
-    console.print(Panel(answer, title="[bold magenta]WheelSaver AI[/bold magenta]", border_style="cyan"))
+# Comandos extraídos (definidos en cli_commands/*)
+app.command()(ready)
+app.command(name="audit-code")(audit_code)
+app.command()(skillify)
+app.command()(ask)
 
 
 if __name__ == "__main__":

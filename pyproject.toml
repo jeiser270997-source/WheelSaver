@@ -11,34 +11,34 @@ license = {text = "MIT"}
 keywords = ["github", "scraper", "ai", "audit", "cli"]
 requires-python = ">=3.10"
 dependencies = [
-    "httpx>=0.27.0",
-    "typer>=0.9.0",
-    "rich>=13.0.0",
-    "tqdm>=4.66.0",
-    "fastapi>=0.109.0",
-    "uvicorn[standard]>=0.27.0",
-    "python-dotenv>=1.0.0",
-    "loguru>=0.7.0",
-    "openai>=1.0.0",
-    "aiosqlite>=0.19.0",
-    "beautifulsoup4>=4.12.0",
-    "slowapi>=0.1.9",
-    "tenacity>=8.2.0"
+    "httpx==0.28.1",
+    "typer==0.25.1",
+    "rich==15.0.0",
+    "tqdm==4.67.3",
+    "fastapi==0.138.0",
+    "uvicorn[standard]==0.49.0",
+    "python-dotenv==1.2.2",
+    "loguru==0.7.3",
+    "openai==2.37.0",
+    "aiosqlite==0.22.1",
+    "beautifulsoup4==4.14.3",
+    "slowapi==0.1.10",
+    "tenacity==9.1.4"
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
-    "pytest-asyncio",
-    "pytest-cov",
-    "pytest-playwright",
-    "black",
-    "ruff"
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "pytest-cov==7.1.0",
+    "pytest-playwright==0.8.0",
+    "black==26.5.1",
+    "ruff==0.15.20"
 ]
 audit = [
-    "bandit>=1.7.0",
-    "vulture>=2.11",
-    "radon>=6.0.0"
+    "bandit==1.9.4",
+    "vulture==2.16",
+    "radon==6.0.1"
 ]
 
 [project.scripts]

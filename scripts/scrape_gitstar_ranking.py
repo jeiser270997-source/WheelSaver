@@ -25,7 +25,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scraper.db_manager import get_stats, upsert_external_repos
 
 TOTAL_PAGES = 100
-REPOS_PER_PAGE = 50
 BASE_URL = "https://gitstar-ranking.com/repositories"
 REQUEST_DELAY = 1.5
 
@@ -55,7 +54,8 @@ def parse_repos_from_html(html):
             try:
                 stars = int(stars_text)
             except ValueError:
-                pass
+                # Sin valor numérico de estrellas → queda 0 (descartable por filtros)
+                logger.debug("Estrellas no parseables: {}", stars_text[:30])
 
         # Descripcion
         desc_el = a_tag.find(class_="repo-description")

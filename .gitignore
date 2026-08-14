@@ -15,5 +15,6 @@ data/
 *.db-wal
 repomix_*.md
 repomix_parts/
+repomix_last_run.log
 *.egg-info/
 .audit/

@@ -8,12 +8,12 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - wheelsaver_data:/root/.wheelsaver
+      - wheelsaver_data:/home/wheelsaver/.wheelsaver
     environment:
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
-      - WHEELSAVER_DB_PATH=/root/.wheelsaver/top_repos.db
+      - WHEELSAVER_DB_PATH=/home/wheelsaver/.wheelsaver/top_repos.db
     command: ["python", "cli.py", "api", "--host", "0.0.0.0"]
 
 volumes:

@@ -8,7 +8,7 @@ Incluye skills nativos para Claude Code que auditan tus proyectos y te recomiend
 librerias existentes, evitando que codees desde cero lo que ya esta resuelto.
 
 ```
-📦 25,411 repos · 🌐 149 lenguajes · ⚡ Búsqueda FTS5 en milisegundos · 🛡️ v3.3.1 (commit 16443de)
+📦 20,073 repos · 🌐 149 lenguajes · ⚡ Búsqueda FTS5 en milisegundos · 🛡️ v3.3.2
 ```
 
 ## Componentes
@@ -96,7 +96,7 @@ WheelSaver/
 ├── frontend/                 # UI web (HTML + CSS + JS dinámico, responsive mobile)
 ├── tests/                    # 80+ tests con pytest + Playwright E2E + CI GitHub Actions
 ├── Dockerfile                # Contenedor Python slim con extras de auditoría
-└── pyproject.toml            # Config del proyecto v3.3.1
+└── pyproject.toml            # Config del proyecto v3.3.2
 ```
 
 ## Comandos del CLI

@@ -10,12 +10,17 @@ Documentacion automatica: http://localhost:8000/docs
 """
 
 import asyncio
+import hmac
+import os
+from datetime import datetime, timezone
+from pathlib import Path
 
 import aiosqlite
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -42,9 +47,13 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# CORS restringido por defecto a localhost; ampliable via ALLOWED_ORIGINS="https://a.com,https://b.com"
+_DEFAULT_ORIGINS = "http://127.0.0.1:8000,http://localhost:8000"
+_ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", _DEFAULT_ORIGINS).split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -66,7 +75,7 @@ async def health(db: aiosqlite.Connection = Depends(get_db)):
 @app.get("/search")
 @limiter.limit("20/minute")
 async def search(
-    request: Request,
+    request: Request,  # noqa: F841 — requerido por slowapi (rate limiting)
     q: str = Query(..., description="Keyword(s) para buscar"),
     limit: int = Query(10, ge=1, le=100, description="Max resultados"),
     language: str = Query(None, description="Filtrar por lenguaje"),
@@ -147,7 +156,7 @@ async def top(
 @app.post("/scrape")
 @limiter.limit("1/hour")
 async def trigger_scrape(
-    request: Request,
+    request: Request,  # noqa: F841 — requerido por slowapi (rate limiting)
     background_tasks: BackgroundTasks,
     min_stars: int = Query(500, ge=10, description="Estrellas minimas para buscar"),
     x_api_key: str | None = Header(None, alias="X-API-Key"),
@@ -156,9 +165,6 @@ async def trigger_scrape(
     Lanza el scraper de GitHub de forma asíncrona en el mismo proceso.
     Limitado a 1 vez por hora por IP. Requiere SCRAPE_ENABLED=1 o X-API-Key válido si SCRAPE_API_KEY está configurado.
     """
-    import os
-    from datetime import datetime, timezone
-
     from scraper.github_fetcher import fetch_top_repos
 
     # Validar autorización por env var o header
@@ -168,7 +174,8 @@ async def trigger_scrape(
     if not scrape_enabled:
         raise HTTPException(status_code=403, detail="El endpoint /scrape está deshabilitado en esta instancia.")
 
-    if required_key and x_api_key != required_key:
+    # Comparación en tiempo constante — evita timing attacks en el API key
+    if required_key and (not x_api_key or not hmac.compare_digest(x_api_key.encode(), required_key.encode())):
         raise HTTPException(status_code=401, detail="Header X-API-Key inválido o ausente.")
 
     STALE_TIMEOUT_HOURS = 6
@@ -241,16 +248,13 @@ async def trigger_scrape(
     }
 
 
-from pydantic import BaseModel
-
-
 class AskRequest(BaseModel):
     question: str
 
 
 @app.post("/ask")
 @limiter.limit("5/minute")
-async def ask_agent(request: Request, req: AskRequest, db: aiosqlite.Connection = Depends(get_db)):
+async def ask_agent(request: Request, req: AskRequest, db: aiosqlite.Connection = Depends(get_db)):  # noqa: F841 — request requerido por slowapi
     """Realiza una consulta al LLM multi-proveedor (RAG) usando repositorios como contexto. Failover automático entre free tiers."""
     from api.llm import ask_llm_about_repos, expand_search_query
 
@@ -268,4 +272,6 @@ async def ask_agent(request: Request, req: AskRequest, db: aiosqlite.Connection 
     return {"question": req.question, "context_repos_used": len(repos), "answer": answer}
 
 
-app.mount("/web", StaticFiles(directory="frontend", html=True), name="frontend")
+# Ruta resuelta contra __file__ — funciona sin importar el cwd desde donde se ejecute
+_FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+app.mount("/web", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")

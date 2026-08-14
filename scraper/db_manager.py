@@ -1,10 +1,28 @@
+"""
+scraper/db_manager.py — ORM ligero y gestión de la BD SQLite de WheelSaver.
+
+Responsabilidad única: esquema, conexión, upserts, estadísticas e índice FTS5.
+La búsqueda (FTS5 + scoring + live fallback) vive en scraper/search.py.
+"""
+
 import hashlib
 import os
+import re
 import shutil
 import sqlite3
 
-import httpx
 from loguru import logger
+
+# Re-export de búsqueda y scoring para backward-compatibilidad de imports:
+#   from scraper.db_manager import search_repos, calculate_repo_score, ...
+# El patrón `as X` + noqa evita que ruff elimine los re-exports (F401).
+from scraper.scoring import calculate_repo_score as calculate_repo_score  # noqa: F401
+from scraper.search import clean_fts_term as clean_fts_term  # noqa: F401
+from scraper.search import expand_keywords_offline as expand_keywords_offline  # noqa: F401
+from scraper.search import search_repos as search_repos  # noqa: F401
+from scraper.search import (
+    search_repos_multi_keywords as search_repos_multi_keywords,
+)
 
 
 def get_db_path() -> str:
@@ -35,8 +53,6 @@ def make_repo_id(owner, name):
 
 def escape_fts_query(kw: str) -> str:
     """Escapa comillas dobles internas y remueve operadores especiales de FTS5."""
-    import re
-
     kw_clean = re.sub(r'[*():^"=]', " ", str(kw))
     return kw_clean.strip()
 
@@ -130,8 +146,9 @@ def init_db():
                 END;
             """)
             _DB_INITIALIZED = True
-        except sqlite3.OperationalError:
-            pass  # FTS5 triggers already exist
+        except sqlite3.OperationalError as e:
+            # Los triggers FTS5 ya existen en esta BD (idempotencia)
+            logger.debug("Triggers FTS5 ya creados: {}", e)
 
     conn.commit()
     return conn
@@ -217,233 +234,6 @@ def upsert_external_repos(repos_list, conn=None):
     upsert_repos(repos_list, conn=conn)
 
 
-def search_repos(keyword, limit=5, conn=None):
-    """
-    Busca repos por keyword usando FTS5 (full-text search).
-    Fallback a LIKE si FTS5 falla o no retorna nada.
-    """
-    owns_conn = False
-    if conn is None:
-        conn = init_db()
-        owns_conn = True
-    try:
-        cursor = conn.cursor()
-
-        try:
-            safe_kw = escape_fts_query(keyword)
-            cursor.execute(
-                """
-                SELECT r.name, r.owner, r.description, r.url, r.stars, r.language, r.topics
-                FROM repos_fts f
-                JOIN repos r ON r.rowid = f.rowid
-                WHERE repos_fts MATCH ?
-                ORDER BY r.stars DESC
-                LIMIT ?
-            """,
-                (f'"{safe_kw}"' if safe_kw else "", limit),
-            )
-        except sqlite3.OperationalError:
-            # Fallback: LIKE query
-            like_kw = f"%{keyword}%"
-            cursor.execute(
-                """
-                SELECT name, owner, description, url, stars, language, topics
-                FROM repos
-                WHERE name LIKE ? OR description LIKE ? OR topics LIKE ?
-                ORDER BY stars DESC
-                LIMIT ?
-            """,
-                (like_kw, like_kw, like_kw, limit),
-            )
-
-        results = cursor.fetchall()
-    finally:
-        if owns_conn:
-            conn.close()
-
-    repos = []
-    for r in results:
-        repos.append(
-            {
-                "name": r[0],
-                "owner": r[1],
-                "description": r[2],
-                "url": r[3],
-                "stars": r[4],
-                "language": r[5],
-                "topics": r[6],
-            }
-        )
-    return repos
-
-
-SYNONYM_MAP = {
-    "autenticacion": ["auth", "jwt", "oauth"],
-    "autenticación": ["auth", "jwt", "oauth"],
-    "seguridad": ["security", "audit", "encryption"],
-    "bd": ["database", "orm", "sql"],
-    "graficos": ["chart", "visualization", "plotting"],
-    "gráficos": ["chart", "visualization", "plotting"],
-    "monitoreo": ["monitoring", "metrics", "telemetry"],
-    "cola": ["queue", "broker", "celery"],
-    "colas": ["queue", "broker", "celery"],
-    "pdf": ["pdf", "pdf-parser"],
-    "imagenes": ["image", "image-processing"],
-    "imágenes": ["image", "image-processing"],
-}
-
-
-def expand_keywords_offline(keywords: list[str]) -> list[str]:
-    """Expande keywords usando un diccionario offline de sinónimos técnicos."""
-    expanded = list(keywords)
-    for kw in keywords:
-        clean_kw = kw.lower().strip()
-        if clean_kw in SYNONYM_MAP:
-            for syn in SYNONYM_MAP[clean_kw]:
-                if syn not in expanded:
-                    expanded.append(syn)
-    return expanded
-
-
-def search_repos_multi_keywords(keywords, limit=20, conn=None):
-    """
-    Busca repos que matcheen CUALQUIERA de las keywords dadas.
-    Usa FTS5 con OR, fallback a LIKE.
-    """
-    # Expandir keywords con diccionario estático offline si aplica
-    keywords = expand_keywords_offline(keywords)
-
-    owns_conn = False
-    if conn is None:
-        conn = init_db()
-        owns_conn = True
-    try:
-        cursor = conn.cursor()
-
-        try:
-            fts_query = " OR ".join(f'"{escape_fts_query(kw)}"' for kw in keywords if escape_fts_query(kw))
-            cursor.execute(
-                """
-                SELECT DISTINCT r.name, r.owner, r.description, r.url, r.stars, r.language, r.topics
-                FROM repos_fts f
-                JOIN repos r ON r.rowid = f.rowid
-                WHERE repos_fts MATCH ?
-                ORDER BY r.stars DESC
-                LIMIT ?
-            """,
-                (fts_query, limit),
-            )
-            used_fallback = False
-        except sqlite3.OperationalError:
-            # Fallback: LIKE queries
-            used_fallback = True
-            seen = set()
-            cursor.execute("SELECT name, owner, description, url, stars, language, topics FROM repos ORDER BY stars DESC LIMIT ?", (limit * 20,))
-            all_repos = cursor.fetchall()
-            results = []
-            for r in all_repos:
-                text = f"{r[0]} {r[1]} {r[2] or ''} {r[6] or ''}".lower()
-                if any(kw.lower() in text for kw in keywords):
-                    if r[0] not in seen:
-                        seen.add(r[0])
-                        results.append(r)
-                        if len(results) >= limit:
-                            break
-
-        results = cursor.fetchall() if not used_fallback else results
-    finally:
-        if owns_conn:
-            conn.close()
-
-    repos = []
-    for r in results:
-        repos.append(
-            {
-                "name": r[0],
-                "owner": r[1],
-                "description": r[2],
-                "url": r[3],
-                "stars": r[4],
-                "language": r[5],
-                "topics": r[6],
-            }
-        )
-
-    # Live fallback: si no hay resultados locales y estamos en modo autogestionado, buscar en GitHub API
-    if not repos and owns_conn:
-        repo_dicts = _fetch_live_github(" ".join(keywords), limit)
-        if repo_dicts:
-            logger.info("+{} repos encontrados via GitHub API y guardados en BD local", len(repo_dicts))
-            repos = repo_dicts[:limit]
-
-    return repos
-
-
-def _fetch_live_github(query: str, limit: int = 20) -> list[dict]:
-    """
-    Consulta la API REST de GitHub (/search/repositories) cuando la BD local
-    no tiene resultados. Usa GITHUB_TOKEN del entorno si existe.
-    Los resultados se persisten en la BD local para futuras consultas.
-    """
-    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
-    headers = {"Accept": "application/vnd.github.v3+json"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-
-    params = {
-        "q": query,
-        "sort": "stars",
-        "order": "desc",
-        "per_page": min(limit, 100),
-    }
-
-    try:
-        with httpx.Client(timeout=15.0) as client:
-            resp = client.get(
-                "https://api.github.com/search/repositories",
-                headers=headers,
-                params=params,
-            )
-
-        if resp.status_code == 403:
-            logger.warning("GitHub API rate limit alcanzado (live fallback)")
-            return []
-        if resp.status_code != 200:
-            logger.warning("GitHub API respondio {} en live fallback", resp.status_code)
-            return []
-
-        items = resp.json().get("items", [])
-        logger.info("GitHub API live: {} resultados para '{}'", len(items), query)
-
-        live_repos = []
-        for item in items:
-            repo = {
-                "id": str(item["id"]),
-                "name": item["name"],
-                "owner": item["owner"]["login"],
-                "description": item.get("description") or "",
-                "url": item["html_url"],
-                "stars": item["stargazers_count"],
-                "language": item.get("language") or "",
-                "topics": ",".join(item.get("topics", [])),
-                "updated_at": item.get("updated_at", ""),
-            }
-            live_repos.append(repo)
-
-        # Persistir en BD local para futuras consultas
-        if live_repos:
-            upsert_repos(live_repos)
-
-        return live_repos
-
-    except httpx.TimeoutException:
-        logger.warning("Timeout en live fallback a GitHub API")
-        return []
-    except Exception as e:
-        logger.error("Error en live fallback a GitHub API: {}", e)
-        return []
-
-
 def get_stats(conn=None):
     """Devuelve estadísticas de la base de datos."""
     owns_conn = False
@@ -476,16 +266,9 @@ def get_stats(conn=None):
     return stats
 
 
-def get_all_repos(conn=None):
-    owns_conn = False
-    if conn is None:
-        conn = init_db()
-        owns_conn = True
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT name, description, topics, url, stars FROM repos ORDER BY stars DESC")
-        results = cursor.fetchall()
-    finally:
-        if owns_conn:
-            conn.close()
-    return results
+# ──────────────────────────────────────────────────────────────────────────────
+# Re-export de búsqueda (backward-compatibilidad de imports)
+#   from scraper.db_manager import search_repos, calculate_repo_score, ...
+# Se coloca al final para evitar import circular (scraper/search importa
+# init_db y upsert_repos de este módulo).
+# ──────────────────────────────────────────────────────────────────────────────
