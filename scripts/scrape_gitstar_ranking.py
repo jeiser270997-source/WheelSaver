@@ -136,8 +136,9 @@ def main(max_pages=None, start_page=1):
     import argparse
     import sys
 
-    # Parse CLI args only if called as script (sys.argv has file)
-    if len(sys.argv) > 1 and sys.argv[0].endswith((".py", ".exe")):
+    # Parse CLI args only when invoked as a script (never when imported,
+    # p.ej. desde `wheelsaver update` — evita que argparse trague los args del CLI).
+    if __name__ == "__main__":
         parser = argparse.ArgumentParser(description="Scrapea gitstar-ranking.com")
         parser.add_argument("--pages", type=int, default=0, help="Paginas (0 = todas)")
         parser.add_argument("--start", type=int, default=1, help="Pagina inicial")

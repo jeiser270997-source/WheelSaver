@@ -75,3 +75,38 @@ test('formatRepoRows formatea con estrellas y lenguaje', () => {
 test('formatRepoRows vacío devuelve vacío', () => {
   assert.strictEqual(H.formatRepoRows([]), '');
 });
+
+test('stalenessInfo: DB fresca (run_history reciente) -> isStale false', () => {
+  const now = Date.now();
+  const dbStub = { prepare: () => ({ get: () => ({ finished_at: new Date(now).toISOString() }) }) };
+  const info = H.stalenessInfo(dbStub, 7);
+  assert.strictEqual(info.isStale, false);
+  assert.strictEqual(info.days, 0);
+  assert.ok(H.stalenessNote(info).includes('DB fresca'));
+});
+
+test('stalenessInfo: DB vieja (15d) -> isStale true y nota de aviso', () => {
+  const old = new Date(Date.now() - 15 * 86400000).toISOString();
+  const dbStub = { prepare: () => ({ get: () => ({ finished_at: old }) }) };
+  const info = H.stalenessInfo(dbStub, 7);
+  assert.strictEqual(info.isStale, true);
+  assert.ok(info.days >= 15);
+  assert.ok(H.stalenessNote(info).includes('wheelsaver_update'));
+});
+
+test('stalenessInfo: sin run_history -> isStale true (sin historial)', () => {
+  const dbStub = { prepare: () => ({ get: () => undefined }) };
+  const info = H.stalenessInfo(dbStub, 7);
+  assert.strictEqual(info.isStale, true);
+  assert.strictEqual(info.days, null);
+});
+
+test('stalenessInfo: error de query -> isStale true sin romper', () => {
+  const dbStub = { prepare: () => { throw new Error('boom'); } };
+  const info = H.stalenessInfo(dbStub, 7);
+  assert.strictEqual(info.isStale, true);
+});
+
+test('stalenessNote: sin info devuelve vacio', () => {
+  assert.strictEqual(H.stalenessNote(null), '');
+});

@@ -19,6 +19,7 @@ const { Server } = require('@modelcontextprotocol/sdk/server/index.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 const { CallToolRequestSchema, ListToolsRequestSchema } = require('@modelcontextprotocol/sdk/types.js');
 
+const { execFile } = require('node:child_process');
 const {
   resolveDbPath,
   buildSearchQuery,
@@ -27,6 +28,8 @@ const {
   buildLanguagesSql,
   formatRepoRows,
   formatStatsRow,
+  stalenessInfo,
+  stalenessNote,
 } = require('./mcp_helpers.js');
 
 const ROOT = __dirname;
@@ -125,6 +128,18 @@ const TOOLS = [
     description: 'Estadísticas de la biblioteca local (total repos, lenguajes, estrellas).',
     inputSchema: { type: 'object', properties: {}, required: [] },
   },
+  {
+    name: 'wheelsaver_update',
+    description: 'Actualiza la biblioteca local de repos bajo demanda (reactivo, no automático). Si la DB está fresca no hace nada, salvo con force=true. Requiere red.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        force: { type: 'boolean', description: 'Forzar la actualización aunque la DB esté fresca (default: false)' },
+        pages: { type: 'number', description: 'Páginas de gitstar-ranking para el update incremental (default: 3, 0 = todas)' },
+      },
+      required: [],
+    },
+  },
 ];
 
 async function executeTool(name, args) {
@@ -140,7 +155,7 @@ async function executeTool(name, args) {
         const rows = queryAll(db, sql, params);
         if (rows.__error) return err(`Error de consulta: ${rows.__error}`);
         const prefix = name === 'wheelsaver_swap' ? '🔁 Alternativas encontradas' : '🔍 Resultados de WheelSaver';
-        return ok(`${prefix} (${rows.length}):\n\n${formatRepoRows(rows) || 'Sin coincidencias. Probá otros keywords.'}`);
+        return ok(`${prefix} (${rows.length}):\n\n${formatRepoRows(rows) || 'Sin coincidencias. Probá otros keywords.'}${stalenessNote(stalenessInfo(db))}`);
       }
 
       case 'wheelsaver_top': {
@@ -148,7 +163,7 @@ async function executeTool(name, args) {
         const { sql, params } = buildTopSql(args.language || null, Number(args.limit ?? 10));
         const rows = queryAll(db, sql, params);
         if (rows.__error) return err(`Error de consulta: ${rows.__error}`);
-        return ok(`🏆 Top repos${args.language ? ` (${args.language})` : ''}:\n\n${formatRepoRows(rows)}`);
+        return ok(`🏆 Top repos${args.language ? ` (${args.language})` : ''}:\n\n${formatRepoRows(rows)}${stalenessNote(stalenessInfo(db))}`);
       }
 
       case 'wheelsaver_languages': {
@@ -166,7 +181,26 @@ async function executeTool(name, args) {
         const { sql, params } = buildStatsSql();
         const rows = queryAll(db, sql, params);
         if (rows.__error) return err(`Error de consulta: ${rows.__error}`);
-        return ok(`📊 WheelSaver — Estado:\n- Base de Datos: ✅ OK (${p})\n- ${formatStatsRow(rows[0])}\n- Modo: $0 Local-First · Biblioteca GitHub del ecosistema`);
+                const info = stalenessInfo(db);
+        return ok(`📊 WheelSaver — Estado:\n- Base de Datos: ✅ OK (${p})\n- ${formatStatsRow(rows[0])}\n- Frescura: ${info.days === null ? 'sin historial' : info.days + 'd'}\n- Modo: $0 Local-First · Biblioteca GitHub del ecosistema (reactiva, sin CI)`);
+      }
+
+      case 'wheelsaver_update': {
+        if (!db) return err('DB no encontrada — no hay nada que actualizar.');
+        const info = stalenessInfo(db);
+        if (!args.force && !info.isStale) {
+          return ok(`✅ DB fresca (hace ${info.days}d) — nada que hacer. Usá force=true si querés forzar.`);
+        }
+        const pages = Number(args.pages ?? 3);
+        const py = process.platform === 'win32' ? 'python' : 'python3';
+        const argsCli = ['cli.py', 'update', '--force', '--pages', String(pages)];
+        return await new Promise((resolve) => {
+          execFile(py, argsCli, { cwd: ROOT, timeout: 300000, windowsHide: true }, (error, stdout, stderr) => {
+            const tail = (s) => String(s || '').split('\n').filter(Boolean).slice(-3).join('\n');
+            if (error) return resolve(err(`Fallo al actualizar: ${error.message}\n${tail(stderr)}`));
+            return resolve(ok(`🔄 Biblioteca actualizada.\n${tail(stdout)}\n\nCorré wheelsaver_stats para ver los nuevos totales.`));
+          });
+        });
       }
 
       default:

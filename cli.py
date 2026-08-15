@@ -49,15 +49,89 @@ import_group = typer.Typer(help="Import data from external sources")
 app.add_typer(import_group, name="import")
 
 
+
+def maybe_update(no_update: bool = False, max_days: int = 7) -> None:
+    """Reactivo: si la DB esta desactualizada, la actualiza antes de responder."""
+    from scraper.freshness import is_stale
+
+    if no_update:
+        return
+    try:
+        if not is_stale(max_days=max_days):
+            return
+    except Exception:
+        return  # sin DB o error: no bloquear la busqueda
+    console.print("[bold yellow]DB desactualizada - actualizando bajo demanda...[/bold yellow]")
+    try:
+        run_update(pages=2, max_days=max_days, force=True)
+        console.print("[bold green]DB actualizada.[/bold green]")
+    except Exception as e:
+        console.print(f"[red]No se pudo actualizar: {e}[/red]")
+        console.print("[dim]Continuando con datos existentes (fallback offline).[/dim]")
+
+
+@app.command()
+def update(
+    max_days: int = typer.Option(7, "--max-days", help="Considerar fresca si la DB tiene <= max_days dias"),
+    full: bool = typer.Option(False, "--full", help="Scrape GraphQL completo en vez de gitstar incremental"),
+    pages: int = typer.Option(3, "--pages", "-p", help="Paginas de gitstar-ranking (incremental, 0 = todas)"),
+    force: bool = typer.Option(False, "--force", help="Actualizar aunque la DB este fresca"),
+):
+    """Actualiza la DB bajo demanda (reactivo). No hace nada si esta fresca."""
+    run_update(pages=pages, max_days=max_days, force=force, full=full)
+
+
+def run_update(pages: int = 3, max_days: int = 7, force: bool = False, full: bool = False) -> None:
+    """Implementacion compartida del update reactivo (CLI + hook)."""
+    from scraper.db_manager import init_db
+    from scraper.freshness import staleness_days
+    from scraper.github_fetcher import log_run_finish, log_run_start
+
+    days = staleness_days()
+    if not force and days is not None and days <= max_days:
+        console.print(f"[green]DB fresca ({days}d <= {max_days}d). Nada que hacer.[/green]")
+        return
+
+    conn = init_db()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM repos")
+    before = cur.fetchone()[0]
+
+    run_id, _ = log_run_start()
+    try:
+        if full:
+            from scraper.github_fetcher import fetch_top_repos
+            console.print("[bold blue]Scrape GraphQL completo...[/bold blue]")
+            fetch_top_repos(min_stars=500, run_id=run_id)
+        else:
+            import scripts.scrape_gitstar_ranking as gs
+            console.print(f"[bold blue]Scrapeo incremental gitstar-ranking ({pages} paginas)...[/bold blue]")
+            gs.main(max_pages=pages if pages > 0 else None)
+            cur.execute("SELECT COUNT(*) FROM repos")
+            after = cur.fetchone()[0]
+            log_run_finish(run_id, repos_inserted=after - before, repos_filtered=0, min_stars=0, status="completed")
+        conn.close()
+    except Exception:
+        try:
+            log_run_finish(run_id, repos_inserted=0, repos_filtered=0, min_stars=0, status="failed")
+        except Exception:
+            pass
+        conn.close()
+        raise
+
+
 @app.command()
 def search(
     keywords: list[str] = typer.Argument(..., help="Keywords para buscar (FTS5 sobre name, description, topics)"),
     limit: int = typer.Option(20, "--limit", "-l", help="Max resultados"),
     language: str = typer.Option(None, "--language", help="Filtrar por lenguaje (ej: Python, Rust)"),
     min_stars: int = typer.Option(None, "--min-stars", help="Estrellas minimas"),
+    no_update: bool = typer.Option(False, "--no-update", help="No actualizar la DB aunque este desactualizada"),
 ):
     """Busca repos en la base de datos usando FTS5."""
     from scraper.db_manager import search_repos_multi_keywords
+
+    maybe_update(no_update=no_update)
 
     results = search_repos_multi_keywords(keywords, limit=limit * 3)
 
@@ -91,9 +165,13 @@ def search(
 
 
 @app.command()
-def stats():
+def stats(
+    no_update: bool = typer.Option(False, "--no-update", help="No actualizar la DB aunque este desactualizada"),
+):
     """Muestra estadisticas de la base de datos."""
     from scraper.db_manager import get_stats
+
+    maybe_update(no_update=no_update)
 
     s = get_stats()
 
@@ -188,9 +266,12 @@ def docker():
 @app.command()
 def swap(
     feature: str = typer.Argument(..., help="Que estas codeando? Ej: 'pdf parser', 'auth jwt', 'http client'"),
+    no_update: bool = typer.Option(False, "--no-update", help="No actualizar la DB aunque este desactualizada"),
 ):
     """Busca si ya existe una libreria para lo que estas codeando."""
     from scraper.db_manager import search_repos_multi_keywords
+
+    maybe_update(no_update=no_update)
 
     keywords = feature.strip().split()
     console.print(f"[bold]Buscando alternativas para:[/bold] {feature}\n")

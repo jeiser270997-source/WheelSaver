@@ -46,3 +46,10 @@ para busquedas ultrarrápidas y offline.
 - WHEELSAVER = **biblioteca GitHub del ecosistema** (25k repos, FTS5, API REST, skills `wheel_saver`/`wheel-ready`/`wheel-swap`).
 - Consumido por: Faceless (`services/wheel_*`, `cli wheel`) y Asistente_Personal (subproyecto).
 - Mapa completo: `E:\PROYECTOS\Mis_Proyectos\faceless-bot TERMINADO\docs\ECOSYSTEM.md`
+
+## Modelo Reactivo (2026-08-15)
+- **SIN GitHub Actions / CI**: workflow "Run Tests" eliminado (generaba correos de fallo).
+- **Actualización bajo demanda**: `wheelsaver update [--force] [--pages N] [--full]`.
+  search/swap/stats actualizan automáticamente si la DB tiene >7 días (flag `--no-update`).
+- MCP: tool `wheelsaver_update` + aviso de frescura en search/top/stats.
+- Frescura = última corrida `completed` en `run_history` (fallback: mtime de la DB).

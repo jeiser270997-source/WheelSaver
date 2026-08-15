@@ -119,4 +119,44 @@ module.exports = {
   truncate,
   formatRepoRows,
   formatStatsRow,
+  stalenessInfo,
+  stalenessNote,
 };
+
+/**
+ * Información de frescura de la DB (run_history → última corrida completada;
+ * fallback al mtime del archivo). Recibe la conexión ya abierta (puro/testeable).
+ */
+function stalenessInfo(db, maxDays = 7) {
+  const info = { days: null, isStale: true, lastUpdate: null, maxDays };
+  try {
+    const row = db
+      .prepare(`SELECT finished_at FROM run_history
+                WHERE status = 'completed' AND finished_at IS NOT NULL
+                ORDER BY started_at DESC LIMIT 1`)
+      .get();
+    if (row && row.finished_at) {
+      info.lastUpdate = row.finished_at;
+      const last = new Date(row.finished_at);
+      const now = Date.now();
+      info.days = Math.max(0, Math.floor((now - last.getTime()) / 86400000));
+      info.isStale = info.days > maxDays;
+    }
+  } catch {
+    info.isStale = true;
+  }
+  return info;
+}
+
+/** Nota legible de staleness para appendear a respuestas. */
+function stalenessNote(info) {
+  if (!info) return '';
+  if (info.isStale) {
+    const d = info.days === null ? 'desconocida' : `${info.days}d`;
+    return `\n\n⚠️ DB desactualizada (${d} > ${info.maxDays}d) — llamá wheelsaver_update.`;
+  }
+  if (info.days !== null) {
+    return `\n\n✅ DB fresca (última actualización hace ${info.days}d).`;
+  }
+  return '';
+}
