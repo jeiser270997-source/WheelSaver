@@ -21,3 +21,4 @@ repomix_last_run.log
 
 # Node (MCP)
 node_modules/
+.freebuff/
