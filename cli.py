@@ -23,9 +23,22 @@ import typer
 from rich.panel import Panel
 from rich.table import Table
 
-from cli_commands.audit import audit_code, ready
-from cli_commands.skills import ask, skillify
-from cli_ui import clean, console
+import importlib.util
+def _load_cli_commands():
+    try:
+        from cli_commands.audit import audit_code as _a, ready as _r
+        from cli_commands.skills import ask as _ask, skillify as _sk
+        from cli_ui import clean as _c, console as _cons
+        return _a, _r, _ask, _sk, _c, _cons
+    except ModuleNotFoundError:
+        # Fallback: añade root del proyecto al path (entry-point global)
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from cli_commands.audit import audit_code as _a2, ready as _r2
+        from cli_commands.skills import ask as _ask2, skillify as _sk2
+        from cli_ui import clean as _c2, console as _cons2
+        return _a2, _r2, _ask2, _sk2, _c2, _cons2
+
+audit_code, ready, ask, skillify, clean, console = _load_cli_commands()
 
 # Reconfigurar stdout/stderr en Windows para evitar UnicodeEncodeError con cp1252
 if sys.platform == "win32":

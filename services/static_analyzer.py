@@ -114,8 +114,14 @@ def _run_radon(target: Path) -> dict:
         return {"available": False, "error": "No se pudo parsear salida de radon"}
 
     high_complexity = []
+    if not isinstance(data, dict):
+        return {"available": True, "high_complexity_count": 0, "top_findings": []}
     for filepath, blocks in data.items():
+        if not isinstance(blocks, list):
+            continue
         for block in blocks:
+            if not isinstance(block, dict):
+                continue
             if block.get("rank", "A") in ("D", "E", "F"):
                 high_complexity.append(
                     {
