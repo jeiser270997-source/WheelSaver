@@ -15,8 +15,8 @@
   `mcp_server.js`, `mcp_helpers.js`, `frontend/**`.
 - **Workflow**: si hay trigger real → fix → `pytest` + `node --test` en verde
   → actualizar este bloque con el nuevo contador → commit.
-- **Checkpoint**: commit `0b3aa7a` (GH Actions eliminado) + reactivo.
-  DB real: `data/top_repos.db` — **20,154 repos** FTS5.
+- **Checkpoint**: auditado 2026-09-02 + reactivo.
+  DB real: `data/top_repos.db` — **21,522 repos** FTS5.
 - **Nota**: `node_modules/` NO está trackeado. Requiere `npm install` una vez
   para el MCP (`better-sqlite3` + `@modelcontextprotocol/sdk`).
 
